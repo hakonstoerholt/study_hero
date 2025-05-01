@@ -107,6 +107,36 @@
         padding: 5px 10px;
         border-radius: 5px;
     }
+
+    .options-container .form-check {
+        margin-bottom: 10px;
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 10px 15px;
+        border-radius: 5px;
+        transition: background-color 0.2s ease;
+    }
+    
+    .options-container .form-check:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .options-container .form-check-input:checked + .form-check-label {
+        font-weight: bold;
+        color: #ffc107; /* Highlight selected option */
+    }
+    
+    /* Style for correct/incorrect options after submission */
+    .form-check.correct-option .form-check-label {
+        color: #28a745; /* Green for correct */
+        font-weight: bold;
+    }
+    .form-check.incorrect-option .form-check-label {
+        color: #dc3545; /* Red for incorrect */
+        text-decoration: line-through;
+    }
+    .form-check.selected-incorrect .form-check-label {
+        font-weight: bold; /* Keep selected incorrect bold */
+    }
 </style>
 {% endblock %}
 
@@ -183,13 +213,21 @@
                         <div class="card-body">
                             <p class="lead">{{ question.content }}</p>
                             
-                            <form id="answer-form" class="mt-4">
-                                <div class="mb-3">
-                                    <label for="user-answer" class="form-label">Your Answer:</label>
-                                    <textarea class="form-control" id="user-answer" rows="3" placeholder="Type your answer here..." required></textarea>
+                            <!-- Changed from textarea to radio buttons -->
+                            <form class="answer-form mt-4" data-question-id="{{ question.id }}">
+                                <div class="mb-3 options-container">
+                                    <label class="form-label">Select your answer:</label>
+                                    {% for option in question.options_list %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_answer_{{ question.id }}" id="option_{{ question.id }}_{{ loop.index }}" value="{{ option }}" required>
+                                        <label class="form-check-label" for="option_{{ question.id }}_{{ loop.index }}">
+                                            {{ option }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
                                 </div>
                                 <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-danger">
+                                    <button type="submit" class="btn btn-danger submit-answer-btn">
                                         <i class="fas fa-bolt"></i> Attack with Answer!
                                     </button>
                                 </div>
@@ -198,11 +236,11 @@
                     </div>
                     
                     <!-- Answer Feedback -->
-                    <div id="answer-feedback" class="alert" style="display: none;"></div>
+                    <div id="answer-feedback-{{ question.id }}" class="alert" style="display: none; margin-top: 15px;"></div>
                     
                     <!-- XP Earned Display -->
                     <div class="text-center mb-4">
-                        <span id="xp-earned" class="badge bg-warning fs-5">+0 XP</span>
+                        <span id="xp-earned-{{ question.id }}" class="badge bg-warning fs-5" style="visibility: hidden;">+0 XP</span>
                     </div>
                 </div>
             {% endfor %}
@@ -285,181 +323,95 @@
 
 {% block extra_js %}
 <script>
-    // Battle-specific variables
-    let bossHealth = 100;
-    let playerHealth = 100;
-    // Fix: Replace Jinja template with data attribute
-    let battleScore = document.getElementById('battle-score') ? 
-        parseInt(document.getElementById('battle-score').textContent, 10) : 0;
-    
+    // Battle-specific handleSubmit
+    function handleSubmit(event) {
+        event.preventDefault();
+        window.stopTimer(); // Use global timer function
+        console.log("handleSubmit called");
+
+        const form = event.target;
+        const questionId = form.dataset.questionId;
+        const selectedOption = form.querySelector('input[type="radio"]:checked');
+
+        if (!selectedOption) {
+            alert('Please select an answer.');
+            // window.startTimer(); // Removed - showQuestion handles timer start
+            console.log("handleSubmit: No option selected");
+            // Re-enable button if user needs to select an option
+            const submitButton = form.querySelector('.submit-answer-btn');
+             if(submitButton) submitButton.disabled = false;
+            return;
+        }
+
+        const userAnswer = selectedOption.value;
+        // Use global questionStartTime set by window.showQuestion
+        const startTime = window.questionStartTime || Date.now(); // Fallback just in case
+        const responseTime = (Date.now() - startTime) / 1000;
+        console.log(`handleSubmit: Submitting QID ${questionId}, Answer: ${userAnswer}, Time: ${responseTime}`);
+
+        // Disable form elements immediately
+        const submitButton = form.querySelector('.submit-answer-btn');
+        if(submitButton) submitButton.disabled = true;
+        form.querySelectorAll('input[type="radio"]').forEach(radio => radio.disabled = true);
+
+        fetch('{{ url_for("main.submit_answer") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Add CSRF token header if needed
+            },
+            body: JSON.stringify({
+                question_id: questionId,
+                answer: userAnswer,
+                response_time: responseTime,
+                // Include battle_id if needed by the backend
+                // battle_id: sessionStorage.getItem('battle_id')
+            })
+        })
+        .then(response => {
+            console.log("handleSubmit: Fetch response received", response);
+            if (!response.ok) {
+                 // Try to get error message from response body for better feedback
+                 return response.text().then(text => {
+                     throw new Error(`HTTP error! status: ${response.status}, message: ${text || 'Server error'}`);
+                 });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("handleSubmit: Fetch data received", data);
+            // Call global showFeedback with success data
+            // Ensure data includes necessary fields like is_correct, explanation, xp_earned, correct_answer
+            window.showFeedback(questionId, data);
+        })
+        .catch(error => {
+            console.error('handleSubmit: Fetch error:', error);
+            // Call global showFeedback with fetch error structure
+             window.showFeedback(questionId, {
+                is_correct: false,
+                explanation: `Error submitting answer: ${error.message}. Please check console or try again.`,
+                xp_earned: 0,
+                correct_answer: '', // No correct answer known on fetch error
+                // battle_status might be relevant here too if available
+            });
+            // Keep form disabled on error? Or re-enable? Re-enabling might allow spamming.
+            // Consider adding a specific error display area if feedback isn't sufficient.
+        });
+    }
+
+    // Removed local showFeedback, damageBoss, damagePlayer, showBattleEffect, updateBattleMessage, showResults
+    // Logic is now centralized in script.js
+
     document.addEventListener('DOMContentLoaded', function() {
-        // Show the first question right away
-        showQuestion(0);
-        
-        // Make feedback visible when needed
-        const feedbackElement = document.getElementById('answer-feedback');
-        if (feedbackElement) {
-            feedbackElement.style.display = 'block';
-        }
-        
-        // Override the feedback function for battle mode
-        window.showFeedback = function(data, responseTime) {
-            const feedbackElement = document.getElementById('answer-feedback');
-            const xpElement = document.getElementById('xp-earned');
-            
-            // Standard feedback display
-            if (data.is_correct) {
-                consecutiveCorrect++;
-                feedbackElement.className = 'alert alert-success';
-                feedbackElement.innerHTML = `<i class="fas fa-check-circle"></i> Correct! ${data.explanation}`;
-                
-                // Damage the boss
-                const damage = data.xp_earned;
-                damageBoss(damage);
-            } else {
-                consecutiveCorrect = 0;
-                feedbackElement.className = 'alert alert-danger';
-                feedbackElement.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect. ${data.explanation}`;
-                
-                // Player takes damage
-                const damage = 10 + Math.floor(Math.random() * 10);
-                damagePlayer(damage);
-            }
-            
-            // Update battle score
-            battleScore += data.xp_earned;
-            document.getElementById('battle-score').textContent = battleScore;
-            
-            // Show XP earned
-            totalXP += data.xp_earned;
-            xpElement.textContent = `+${data.xp_earned} XP`;
-            xpElement.classList.add('xp-gain');
-            
-            // Handle battle status update
-            if (data.battle_status && data.battle_status !== 'in-progress') {
-                handleBattleStatus(data.battle_status);
-            }
-            
-            // Remove animation class after animation completes
-            setTimeout(() => {
-                xpElement.classList.remove('xp-gain');
-            }, 1000);
-        };
-        
-        // Override the results function for battle mode
-        window.showResults = function() {
-            const questionContainer = document.getElementById('question-container');
-            const resultsContainer = document.getElementById('results-container');
-            const battleArena = document.getElementById('battle-arena');
-            
-            if (questionContainer && resultsContainer) {
-                questionContainer.style.display = 'none';
-                battleArena.style.display = 'none';
-                resultsContainer.style.display = 'block';
-                
-                // Update total XP and score displays
-                document.getElementById('total-xp').textContent = totalXP;
-                document.getElementById('final-score').textContent = battleScore;
-                
-                // Show victory or defeat based on boss health
-                if (bossHealth <= 0) {
-                    document.getElementById('victory-container').style.display = 'block';
-                } else {
-                    document.getElementById('defeat-container').style.display = 'block';
-                }
-            }
-        };
+        // Attach event listeners to all battle forms
+        document.querySelectorAll('.answer-form').forEach(form => {
+            form.addEventListener('submit', handleSubmit);
+        });
+
+        // Initial showQuestion(0) is handled by the global DOMContentLoaded in script.js
+        console.log("Battle.html DOMContentLoaded: Attached handleSubmit listeners.");
+        // Any other battle-specific setup that DOESN'T involve question flow can go here.
     });
-    
-    // Function to damage the boss
-    function damageBoss(amount) {
-        const healthBar = document.getElementById('boss-health-bar');
-        const bossIcon = document.querySelector('.boss-icon');
-        
-        // Create damage effect
-        showBattleEffect(amount, 'damage', '.boss-container');
-        
-        // Animate boss
-        bossIcon.classList.add('damaged');
-        setTimeout(() => {
-            bossIcon.classList.remove('damaged');
-        }, 500);
-        
-        // Update health
-        bossHealth = Math.max(0, bossHealth - amount);
-        const healthPercent = (bossHealth / 100) * 100;
-        healthBar.style.width = `${healthPercent}%`;
-        healthBar.setAttribute('aria-valuenow', bossHealth);
-        document.querySelector('.health-label').textContent = `Boss HP: ${bossHealth}/100`;
-        
-        // Update battle message
-        updateBattleMessage(true, amount);
-        
-        // Check if boss is defeated
-        if (bossHealth <= 0) {
-            document.getElementById('boss-health-bar').style.width = '0%';
-            document.getElementById('battle-message').innerHTML = 
-                '<p class="text-success mb-0">Boss defeated! Victory is yours!</p>';
-        }
-    }
-    
-    // Function to damage the player
-    function damagePlayer(amount) {
-        const healthBar = document.getElementById('player-health-bar');
-        
-        // Create damage effect
-        showBattleEffect(amount, 'damage', '.player-health-bar');
-        
-        // Update health
-        playerHealth = Math.max(0, playerHealth - amount);
-        const healthPercent = (playerHealth / 100) * 100;
-        healthBar.style.width = `${healthPercent}%`;
-        healthBar.setAttribute('aria-valuenow', playerHealth);
-        
-        // Update battle message
-        updateBattleMessage(false, amount);
-        
-        // Check if player is defeated
-        if (playerHealth <= 0) {
-            document.getElementById('player-health-bar').style.width = '0%';
-            document.getElementById('battle-message').innerHTML = 
-                '<p class="text-danger mb-0">You have been defeated by the boss!</p>';
-            
-            // End the battle after a short delay if player is defeated
-            setTimeout(() => {
-                showResults();
-            }, 2000);
-        }
-    }
-    
-    // Show floating battle effect text
-    function showBattleEffect(amount, type, targetSelector) {
-        const target = document.querySelector(targetSelector);
-        const effect = document.createElement('div');
-        effect.className = `battle-effect ${type}`;
-        effect.textContent = type === 'damage' ? `-${amount}` : `+${amount}`;
-        
-        // Position randomly within the target
-        const leftPos = 30 + Math.random() * 40;
-        effect.style.left = `${leftPos}%`;
-        
-        target.appendChild(effect);
-        
-        // Remove the element after animation completes
-        setTimeout(() => {
-            effect.remove();
-        }, 1500);
-    }
-    
-    // Update the battle message
-    function updateBattleMessage(playerAttacking, amount) {
-        const messageElement = document.getElementById('battle-message');
-        
-        if (playerAttacking) {
-            messageElement.innerHTML = `<p class="mb-0">You attacked the boss for <span class="text-danger">${amount}</span> damage!</p>`;
-        } else {
-            messageElement.innerHTML = `<p class="mb-0">The boss attacked you for <span class="text-danger">${amount}</span> damage!</p>`;
-        }
-    }
+
 </script>
 {% endblock %}

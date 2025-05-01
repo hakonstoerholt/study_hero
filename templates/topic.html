@@ -109,8 +109,9 @@
                                     <strong>Explanation:</strong> {{ question.explanation }}
                                 </div>
                                 {% endif %}
-                                <div class="text-end">
+                                <div class="d-flex justify-content-between">
                                     <small class="text-muted">Difficulty: {{ question.difficulty }}/5</small>
+                                    <small class="text-warning fw-bold">XP: {{ question.xp_value }}</small> {# Added XP value #}
                                 </div>
                             </div>
                         </div>

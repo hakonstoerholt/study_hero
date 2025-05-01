@@ -36,7 +36,8 @@
                     <div class="navbar-text text-light">
                         {% if user %}
                         <i class="fas fa-user"></i> {{ user.username }} | 
-                        <i class="fas fa-star"></i> Level {{ user.level }}
+                        <i class="fas fa-star"></i> Level {{ user.level }} | 
+                        <i class="fas fa-trophy"></i> XP: {{ user.total_xp }}
                         {% else %}
                         <a href="#" class="btn btn-outline-light btn-sm">Login</a>
                         {% endif %}

@@ -1,5 +1,6 @@
 from study_app import db
 import math
+from study_app.models import User
 
 def calculate_xp(is_correct, response_time, difficulty):
     """
@@ -139,3 +140,13 @@ def calculate_combo_bonus(consecutive_correct):
     # Exponential growth with a cap
     bonus = min(100, int(5 * (consecutive_correct ** 1.5)))
     return bonus
+
+def award_xp(user_id, xp_to_add, db_session):
+    """Fetches a user and calls their add_experience method."""
+    user = db_session.get(User, user_id) # Use db.session.get for primary key lookup
+    if user:
+        leveled_up = user.add_experience(xp_to_add)
+        # No need to explicitly update level here, add_experience handles it.
+        # db_session.add(user) # Usually not needed if user is already in session
+        return leveled_up # Return whether a level up occurred
+    return False

@@ -1,13 +1,18 @@
 from datetime import datetime
 from study_app import db
+# Import JSON type if using PostgreSQL or similar, otherwise use Text
+from sqlalchemy.dialects.postgresql import JSONB 
+# Or for SQLite/MySQL, use Text and handle JSON manually:
+from sqlalchemy import Text 
+import json
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
-    level = db.Column(db.Integer, default=1)
-    experience = db.Column(db.Integer, default=0)
+    level = db.Column(db.Integer, nullable=False, default=1)
+    total_xp = db.Column(db.Integer, nullable=False, default=0)  # Renamed from experience
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     topics = db.relationship('Topic', backref='owner', lazy=True)
     
@@ -16,9 +21,9 @@ class User(db.Model):
         
     def add_experience(self, amount):
         """Add experience to the user and level up if necessary."""
-        self.experience += amount
+        self.total_xp += amount  # Use total_xp
         # Simple leveling formula: level = experience // 100
-        new_level = self.experience // 100 + 1
+        new_level = self.total_xp // 100 + 1
         if new_level > self.level:
             self.level = new_level
             return True  # Indicates level up occurred
@@ -50,13 +55,36 @@ class Document(db.Model):
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    answer = db.Column(db.Text, nullable=False)
+    # Store options as JSON or Text. Using Text for broader compatibility.
+    # If using PostgreSQL, JSONB is generally preferred:
+    # options = db.Column(JSONB) 
+    options = db.Column(Text) # Store options as a JSON string
+    answer = db.Column(db.Text, nullable=False) # This will store the TEXT of the correct option
     explanation = db.Column(db.Text)
     difficulty = db.Column(db.Integer, default=1)  # 1-5 scale
+    xp_value = db.Column(db.Integer, nullable=False, default=10)  # Experience points awarded for correct answer
     topic_id = db.Column(db.Integer, db.ForeignKey('topic.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_responses = db.relationship('UserResponse', backref='question', lazy=True)
     
+    # Helper property to get options as a list
+    @property
+    def options_list(self):
+        if self.options:
+            try:
+                return json.loads(self.options)
+            except json.JSONDecodeError:
+                return [] # Return empty list if JSON is invalid
+        return []
+
+    # Helper property to set options from a list
+    @options_list.setter
+    def options_list(self, value):
+        if isinstance(value, list):
+            self.options = json.dumps(value)
+        else:
+            raise ValueError("Options must be a list")
+            
     def __repr__(self):
         return f'<Question {self.id}>'
 

@@ -2,28 +2,55 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from study_app import db
 from study_app.models import User, Topic, Document, Question, Battle, UserResponse
 from study_app.pdf_processor import process_pdf_file
-from study_app.ai_interface import generate_questions, evaluate_answer
-from study_app.game_logic import calculate_xp, update_user_stats
+# Removed evaluate_answer import
+from study_app.ai_interface import generate_questions
+from study_app.game_logic import calculate_xp, update_user_stats, award_xp
 import os
 from werkzeug.utils import secure_filename
 from datetime import datetime
+import json # Import json for models
 
 # Create a Blueprint for our main routes
 main_bp = Blueprint('main', __name__)
 
+# Assume a function to get the current user (replace with actual auth later)
+def get_current_user():
+    """Gets user with ID 1, creating a default one if it doesn't exist (for testing)."""
+    user = db.session.get(User, 1)
+    if not user:
+        # Create a default user if user 1 doesn't exist
+        print("Creating default user with ID 1 for testing.")
+        user = User(id=1, username='TestUser', email='test@example.com', level=1, total_xp=0)
+        db.session.add(user)
+        try:
+            db.session.commit()
+            print("Default user created successfully.")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error creating default user: {e}")
+            return None # Return None if creation failed
+        # Re-fetch the user after commit to ensure it's attached to the session
+        user = db.session.get(User, 1)
+    return user
+
 @main_bp.route('/')
 def index():
     """Landing page or dashboard if user is logged in."""
-    # For now, we'll just pass an empty user, this would be replaced with actual auth later
-    mock_user = {"username": "Demo User", "level": 5, "experience": 450}
-    topics = Topic.query.all()
-    return render_template('index.html', user=mock_user, topics=topics)
+    user = get_current_user()
+    topics = Topic.query.filter_by(user_id=user.id).all() if user else []
+    # Pass user object directly
+    return render_template('index.html', user=user, topics=topics)
 
 @main_bp.route('/topic/<int:topic_id>')
 def view_topic(topic_id):
     """View a topic's details, documents, and questions."""
+    user = get_current_user()
     topic = Topic.query.get_or_404(topic_id)
-    return render_template('topic.html', topic=topic)
+    # Ensure the topic belongs to the user or handle permissions appropriately
+    # if user and topic.user_id != user.id:
+    #     flash("You don't have permission to view this topic.", "danger")
+    #     return redirect(url_for('main.index'))
+    return render_template('topic.html', topic=topic, user=user)
 
 @main_bp.route('/upload', methods=['GET', 'POST'])
 def upload_document():
@@ -80,16 +107,25 @@ def upload_document():
             db.session.commit()
             
             # Generate initial questions based on the document
-            questions = generate_questions(extracted_text, 5)
+            # Request 4 options per question (1 correct, 3 distractors)
+            questions_data = generate_questions(extracted_text, num_questions=5, num_options=4)
             
             # Save questions to database
-            for q in questions:
+            for q_data in questions_data:
+                # Ensure all required keys are present
+                if not all(k in q_data for k in ["question", "options", "answer", "explanation", "difficulty"]):
+                    flash(f"Skipping question due to missing data: {q_data.get('question', 'N/A')}", "warning")
+                    continue
+                    
                 new_question = Question(
-                    content=q['question'],
-                    answer=q['answer'],
-                    explanation=q['explanation'],
-                    difficulty=q['difficulty'],
+                    content=q_data['question'],
+                    # Use the options_list setter to store options as JSON
+                    options_list=q_data['options'], 
+                    answer=q_data['answer'],
+                    explanation=q_data['explanation'],
+                    difficulty=q_data['difficulty'],
                     topic_id=topic_id
+                    # xp_value is handled by default in the model
                 )
                 db.session.add(new_question)
             
@@ -105,22 +141,28 @@ def upload_document():
 @main_bp.route('/training/<int:topic_id>')
 def training_mode(topic_id):
     """Training mode for a specific topic."""
+    user = get_current_user() # Fetch the user
     topic = Topic.query.get_or_404(topic_id)
     questions = Question.query.filter_by(topic_id=topic_id).order_by(Question.difficulty).all()
-    return render_template('training.html', topic=topic, questions=questions)
+    # Pass user to the template
+    return render_template('training.html', topic=topic, questions=questions, user=user)
 
 @main_bp.route('/battle/<int:topic_id>')
 def battle_mode(topic_id):
     """Battle mode for a specific topic."""
+    user = get_current_user() # Fetch the user
+    if not user:
+        flash("Please log in to start a battle.", "warning")
+        return redirect(url_for('main.index')) # Or login page
+        
     topic = Topic.query.get_or_404(topic_id)
     
     # Create a new battle instance
-    mock_user_id = 1  # Replace with actual user ID when auth is implemented
-    
+    # Use the actual user's ID
     new_battle = Battle(
-        user_id=mock_user_id,
+        user_id=user.id, 
         topic_id=topic_id,
-        difficulty=1
+        difficulty=1 # Consider using calculate_boss_difficulty(user.level)
     )
     db.session.add(new_battle)
     db.session.commit()
@@ -131,84 +173,143 @@ def battle_mode(topic_id):
     # Get challenging questions for the battle
     questions = Question.query.filter_by(topic_id=topic_id).order_by(Question.difficulty.desc()).limit(5).all()
     
-    return render_template('battle.html', topic=topic, questions=questions, battle=new_battle)
+    # Pass user to the template
+    return render_template('battle.html', topic=topic, questions=questions, battle=new_battle, user=user)
 
 @main_bp.route('/answer', methods=['POST'])
 def submit_answer():
     """Submit an answer to a question."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'User not logged in'}), 401
+        
     data = request.json
     question_id = data.get('question_id')
-    user_answer = data.get('answer')
+    user_answer = data.get('answer') # This will now be the selected option text
     response_time = data.get('response_time')
     
-    # Get the question from the database
-    question = Question.query.get_or_404(question_id)
+    question = db.session.get(Question, question_id)
+    if not question:
+        return jsonify({'error': 'Question not found'}), 404
+
+    # Direct comparison for multiple-choice
+    is_correct = (user_answer == question.answer)
+    explanation = question.explanation # Use the stored explanation
     
-    # Evaluate the answer using AI
-    evaluation = evaluate_answer(user_answer, question.answer, question.content)
-    is_correct = evaluation['is_correct']
-    explanation = evaluation['explanation']
-    
-    # Calculate XP based on correctness and response time
-    xp_earned = calculate_xp(is_correct, response_time, question.difficulty)
-    
+    xp_to_add = 0
+    if is_correct:
+        xp_to_add = question.xp_value
+
     # Store user's response
-    mock_user_id = 1  # Replace with actual user ID when auth is implemented
-    
     user_response = UserResponse(
-        user_id=mock_user_id,
+        user_id=user.id, # Use logged-in user's ID
         question_id=question_id,
-        response_text=user_answer,
+        response_text=user_answer, # Store the selected option text
         is_correct=is_correct,
         response_time=response_time
     )
     db.session.add(user_response)
     
-    # Update user stats and battle progress if in battle mode
+    leveled_up = False
+    if is_correct and xp_to_add > 0:
+        # Award XP and update level using the helper function
+        leveled_up = award_xp(user.id, xp_to_add, db.session) # Use logged-in user's ID
+        # REMOVED: flash(f"Correct! +{xp_to_add} XP", 'success')
+        if leveled_up:
+            # User object in session is already updated by award_xp
+            # REMOVED: flash(f"Level Up! You reached Level {user.level}!", 'info')
+            pass # Keep structure, but no flash needed here
+    elif not is_correct:
+        # Provide the correct answer in the feedback for incorrect answers
+        # REMOVED: flash(f"Incorrect. The correct answer was: '{question.answer}'. Explanation: {explanation}", 'danger')
+        pass # Keep structure, but no flash needed here
+    else: # Correct but 0 XP
+        # REMOVED: flash("Correct!", 'success')
+        pass # Keep structure, but no flash needed here
+
+    # Update battle progress if in battle mode
     battle_id = session.get('battle_id')
-    battle_updated = None
+    battle_updated_status = None
     
     if battle_id:
-        battle = Battle.query.get(battle_id)
-        if battle:
-            battle.score += xp_earned
-            # Update battle status if needed
-            battle_updated = battle.status
+        battle = db.session.get(Battle, battle_id)
+        # Ensure battle belongs to the current user
+        if battle and battle.user_id == user.id:
+            battle.score += xp_to_add 
+            # Potentially add logic here to end battle if won/lost
+            # e.g., if battle.score >= required_score: battle.status = 'won'
+            battle_updated_status = battle.status
     
-    # Update user stats (level, experience)
-    user = User.query.get(mock_user_id)
-    if user:
-        level_up = update_user_stats(user, xp_earned)
-    
+    # Commit session changes
     db.session.commit()
     
     return jsonify({
         'is_correct': is_correct,
+        # Send back the correct answer and explanation regardless
+        'correct_answer': question.answer, 
         'explanation': explanation,
-        'xp_earned': xp_earned,
-        'battle_status': battle_updated
+        'xp_earned': xp_to_add,
+        'battle_status': battle_updated_status,
+        'leveled_up': leveled_up,
+        # Send back updated user stats for potential UI updates
+        'user_level': user.level,
+        'user_total_xp': user.total_xp
     })
 
 @main_bp.route('/profile')
 def user_profile():
     """User profile page with stats and history."""
-    # For now, using a mock user
-    mock_user_id = 1
-    user = User.query.get(mock_user_id)
-    
+    user = get_current_user()
     if not user:
-        # Create a sample user for demo purposes
-        user = User(
-            id=mock_user_id,
-            username="Demo User",
-            email="demo@example.com",
-            level=5,
-            experience=450
-        )
-        db.session.add(user)
-        db.session.commit()
+        # If no user (e.g., ID 1 doesn't exist or auth fails), redirect or show error
+        flash("Please log in to view your profile.", "warning")
+        return redirect(url_for('main.index')) # Or a login page
     
     topics = Topic.query.filter_by(user_id=user.id).all()
     battles = Battle.query.filter_by(user_id=user.id).order_by(Battle.started_at.desc()).all()
     
+    # Pass user object directly
     return render_template('profile.html', user=user, topics=topics, battles=battles)
+
+@main_bp.route('/topic/<int:topic_id>/delete', methods=['POST'])
+def delete_topic(topic_id):
+    """Delete a topic and its associated content."""
+    user = get_current_user()
+    if not user:
+        flash("Please log in to delete topics.", "warning")
+        return redirect(url_for('main.index')) # Or login page
+
+    topic = db.session.get(Topic, topic_id)
+
+    if not topic:
+        flash("Topic not found.", "danger")
+        return redirect(url_for('main.index'))
+
+    # Basic authorization check (replace with proper auth later)
+    if topic.user_id != user.id:
+        flash("You don't have permission to delete this topic.", "danger")
+        return redirect(url_for('main.index'))
+
+    try:
+        # Delete associated questions first
+        Question.query.filter_by(topic_id=topic.id).delete()
+        # Delete associated documents (consider deleting files from disk too)
+        # Add logic here to delete files from the UPLOAD_FOLDER if needed
+        # for doc in topic.documents:
+        #     try:
+        #         os.remove(doc.file_path)
+        #     except OSError as e:
+        #         print(f"Error deleting file {doc.file_path}: {e}")
+        Document.query.filter_by(topic_id=topic.id).delete()
+        # Delete associated battles
+        Battle.query.filter_by(topic_id=topic.id).delete()
+        # Delete the topic itself
+        db.session.delete(topic)
+        db.session.commit()
+        flash(f"Topic '{topic.title}' and all its content deleted successfully.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting topic: {str(e)}", "danger")
+        print(f"Error deleting topic {topic_id}: {e}") # Log the error
+
+    return redirect(url_for('main.index'))

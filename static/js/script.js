@@ -3,17 +3,52 @@
 // Define global variables and functions first
 let timer = null;
 let questionStartTime = null;
-let currentQuestionIndex = 0;
-let consecutiveCorrect = 0;
-let totalXP = 0;
+let currentQuestionIndex = 0; // Ensure this is the single source of truth
+let consecutiveCorrect = 0; // Primarily for training?
+let totalXP = 0; // Global XP accumulation
+
+// Global battle state (initialize defaults, can be overridden by initializeBattleMode)
+window.bossHealth = 100;
+window.playerHealth = 100;
+window.battleScore = 0;
+
+
+// Stop the timer
+window.stopTimer = function() {
+    if (timer) {
+        clearTimeout(timer);
+        timer = null;
+        console.log("Timer stopped."); // Added log
+    }
+};
 
 // Initialize global functions before DOM is ready
 window.showQuestion = function(index) {
+    console.log(`Attempting to show question at index: ${index}`); // Log index
     const questions = document.querySelectorAll('.question-item');
-    if (!questions || questions.length === 0) return;
-    
+    if (!questions || questions.length === 0) {
+        console.log('No questions found or questions list is empty.');
+        // If no questions, maybe show results immediately?
+        if (typeof window.showResults === 'function') {
+             console.log("No questions found, calling showResults.");
+             window.showResults();
+        }
+        return;
+    }
+    console.log(`Found ${questions.length} question elements.`); // Add log
+
+    // Validate index
+    if (isNaN(index) || index < 0) {
+        console.error(`Invalid index received: ${index}. Cannot show question.`);
+        // Optionally show results or stop if index is invalid after first question
+        // if (index !== 0 && typeof window.showResults === 'function') {
+        //     window.showResults();
+        // }
+        return;
+    }
+
     if (index >= questions.length) {
-        // No more questions, show results
+        console.log(`Index ${index} is out of bounds (${questions.length} questions), showing results.`);
         if (typeof window.showResults === 'function') {
             window.showResults();
         }
@@ -21,15 +56,80 @@ window.showQuestion = function(index) {
     }
 
     // Hide all questions first
-    questions.forEach(q => q.style.display = 'none');
+    questions.forEach((q, i) => {
+         if (q && q.style) {
+           q.style.display = 'none';
+        } else {
+           console.warn(`Element at index ${i} in questions NodeList is invalid or lacks style property.`);
+        }
+    });
+    console.log(`Hid all question elements.`);
 
     // Show the current question
-    questions[index].style.display = 'block';
-    currentQuestionIndex = index;
+    const currentQuestionElement = questions[index];
+    console.log(`Trying to access questions[${index}]. Element found:`, currentQuestionElement); // Log the element itself
+
+    // Explicitly check if the element exists AND has a style property
+    if (!currentQuestionElement || typeof currentQuestionElement.style === 'undefined') {
+        console.error(`Element at index ${index} (questions[${index}]) is invalid or lacks style property. Cannot set display. Element:`, currentQuestionElement);
+        // Show results if we can't display the question
+        if (typeof window.showResults === 'function') {
+             window.showResults();
+        }
+        return; // Stop execution if element is invalid
+    }
+
+    currentQuestionElement.style.display = 'block'; // Should be safe now
+    currentQuestionIndex = index; // *** Update the global index ***
+    console.log(`Set currentQuestionIndex to: ${currentQuestionIndex}`); // Log update
+
+    // Reset form elements within the current question
+    const form = currentQuestionElement.querySelector('form'); // Find the form inside the question
+    if (form) {
+        // Reset textarea if it exists (for training mode)
+        const textarea = form.querySelector('textarea');
+        if (textarea) {
+            textarea.value = '';
+            textarea.disabled = false;
+        }
+
+        // Reset radio buttons if they exist (for battle mode)
+        const radios = form.querySelectorAll('input[type="radio"]');
+        radios.forEach(radio => {
+            radio.checked = false;
+            radio.disabled = false;
+            // Reset visual feedback styles on options
+            const labelContainer = radio.closest('.form-check');
+            if (labelContainer) {
+                labelContainer.classList.remove('correct-option', 'incorrect-option', 'selected-incorrect');
+            }
+        });
+
+        // Re-enable submit button
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+            submitButton.disabled = false;
+            // Optional: Reset button text if needed
+        }
+
+        // Reset feedback and XP display for the current question
+        const feedbackElement = currentQuestionElement.querySelector(`[id^='answer-feedback']`); // More general selector
+        const xpElement = currentQuestionElement.querySelector(`[id^='xp-earned']`);
+        if (feedbackElement) {
+            feedbackElement.style.display = 'none';
+            feedbackElement.className = 'alert'; // Reset classes
+            feedbackElement.innerHTML = ''; // Clear content
+        }
+        if (xpElement) {
+            xpElement.style.visibility = 'hidden';
+            xpElement.textContent = '+0 XP';
+        }
+    }
 
     // Start the timer for this question
     questionStartTime = Date.now();
-    updateTimer();
+    window.stopTimer(); // Ensure any previous timer is stopped before starting new one
+    updateTimer(); // Start the timer loop
 
     // Update progress indicator if it exists
     const progressIndicator = document.getElementById('question-progress');
@@ -40,15 +140,16 @@ window.showQuestion = function(index) {
 
 // Update the timer display
 function updateTimer() {
-    if (timer) clearTimeout(timer);
-    
+    // No need to clear here, window.showQuestion handles clearing before starting
+    // if (timer) clearTimeout(timer);
+
     const timerDisplay = document.getElementById('question-timer');
-    if (!timerDisplay) return;
-    
+    if (!timerDisplay || !questionStartTime) return; // Exit if no display or start time
+
     const elapsedSeconds = Math.floor((Date.now() - questionStartTime) / 1000);
     timerDisplay.textContent = formatTime(elapsedSeconds);
-    
-    // Update every second
+
+    // Schedule next update
     timer = setTimeout(updateTimer, 1000);
 }
 
@@ -59,91 +160,220 @@ function formatTime(seconds) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Default show results function that can be overridden by specific pages
+// Default show results function (can be overridden by initializeBattleMode)
 window.showResults = function() {
+    console.log("Default showResults called.");
+    window.stopTimer();
     const questionContainer = document.getElementById('question-container');
     const resultsContainer = document.getElementById('results-container');
-    
+
     if (questionContainer && resultsContainer) {
         questionContainer.style.display = 'none';
         resultsContainer.style.display = 'block';
-        
+
         // Update total XP display
         const totalXpDisplay = document.getElementById('total-xp');
         if (totalXpDisplay) {
-            totalXpDisplay.textContent = totalXP;
+            totalXpDisplay.textContent = totalXP; // Use global totalXP
         }
-    }
-};
-
-// Default feedback function that can be overridden by specific pages
-window.showFeedback = function(data, responseTime) {
-    const feedbackElement = document.getElementById('answer-feedback');
-    const xpElement = document.getElementById('xp-earned');
-    
-    if (!feedbackElement || !xpElement) return;
-    
-    // Update consecutive correct count
-    if (data.is_correct) {
-        consecutiveCorrect++;
-        feedbackElement.className = 'alert alert-success';
-        feedbackElement.innerHTML = `<i class="fas fa-check-circle"></i> Correct! ${data.explanation}`;
     } else {
-        consecutiveCorrect = 0;
-        feedbackElement.className = 'alert alert-danger';
-        feedbackElement.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect. ${data.explanation}`;
+         console.warn("showResults: Could not find question or results container.");
     }
-    
-    // Show XP earned
-    totalXP += data.xp_earned;
-    xpElement.textContent = `+${data.xp_earned} XP`;
-    xpElement.classList.add('xp-gain');
-    
-    // Handle battle status update if applicable
-    if (data.battle_status && data.battle_status !== 'in-progress') {
-        if (typeof handleBattleStatus === 'function') {
-            handleBattleStatus(data.battle_status);
-        }
-    }
-    
-    // Remove animation class after animation completes
-    setTimeout(() => {
-        xpElement.classList.remove('xp-gain');
-    }, 1000);
 };
 
-// Submit answer function
+// Centralized feedback function
+window.showFeedback = function(questionId, data) {
+    console.log(`Global showFeedback called for QID ${questionId} with data:`, data);
+
+    const questionElement = document.querySelector(`.question-item[data-question-id='${questionId}']`);
+    if (!questionElement) {
+        console.error(`Global showFeedback: Could not find question element for QID ${questionId}`);
+        // Still schedule next step even if feedback display fails
+        scheduleNextStepOrResults();
+        return;
+    }
+
+    const feedbackElement = questionElement.querySelector(`[id^='answer-feedback']`);
+    const xpElement = questionElement.querySelector(`[id^='xp-earned']`);
+    const form = questionElement.querySelector('form');
+
+    if (feedbackElement) {
+        feedbackElement.style.display = 'block';
+    } else {
+        console.warn(`Global showFeedback: Could not find feedback element for QID ${questionId}`);
+    }
+
+    if (xpElement) {
+        xpElement.style.visibility = 'visible';
+        xpElement.textContent = `+${data.xp_earned} XP`;
+        console.log(`Global showFeedback: Displayed XP: +${data.xp_earned}`);
+    } else {
+        console.warn(`Global showFeedback: Could not find XP element for QID ${questionId}`);
+    }
+
+    // Update global totalXP regardless of mode
+    totalXP += data.xp_earned;
+    console.log(`Global showFeedback: Total XP updated to ${totalXP}`);
+
+    // Check if battle functions exist (meaning we are in battle mode)
+    const isBattleMode = typeof window.damageBoss === 'function' && typeof window.damagePlayer === 'function';
+
+    if (isBattleMode) {
+        // --- Battle Mode Feedback Logic ---
+        console.log("Global showFeedback: Applying BATTLE logic.");
+        // Highlight options
+        if (form && data.correct_answer !== undefined) {
+            form.querySelectorAll('input[type="radio"]').forEach(radio => {
+                const labelContainer = radio.closest('.form-check');
+                if (!labelContainer) return;
+                labelContainer.classList.remove('correct-option', 'incorrect-option', 'selected-incorrect');
+
+                if (radio.value === data.correct_answer) {
+                    labelContainer.classList.add('correct-option');
+                } else if (radio.checked) {
+                    labelContainer.classList.add('incorrect-option', 'selected-incorrect');
+                } else {
+                    labelContainer.classList.add('incorrect-option');
+                }
+            });
+            console.log("Global showFeedback: Highlighted options");
+        }
+
+        // Display feedback text and apply damage/score
+        if (data.is_correct) {
+            if (feedbackElement) {
+                feedbackElement.className = 'alert alert-success';
+                feedbackElement.innerHTML = `<i class="fas fa-check-circle"></i> Correct! ${data.explanation || ''}`;
+            }
+            window.damageBoss(data.xp_earned); // Call global battle function
+            console.log("Global showFeedback: Displayed correct feedback & damaged boss");
+        } else {
+            if (feedbackElement) {
+                feedbackElement.className = 'alert alert-danger';
+                feedbackElement.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect. The correct answer was: <strong>${data.correct_answer || 'N/A'}</strong>. ${data.explanation || ''}`;
+            }
+            window.damagePlayer(10 + Math.floor(Math.random() * 10)); // Call global battle function
+            console.log("Global showFeedback: Displayed incorrect feedback & damaged player");
+        }
+
+        // Update battle score (global)
+        window.battleScore += data.xp_earned;
+        const battleScoreElement = document.getElementById('battle-score');
+        if (battleScoreElement) battleScoreElement.textContent = window.battleScore;
+        console.log(`Global showFeedback: Battle score updated to ${window.battleScore}`);
+
+        if (data.leveled_up) {
+            console.log("Level Up detected!");
+            // Add visual indicator if desired
+        }
+        // --- End Battle Mode Logic ---
+
+    } else {
+        // --- Non-Battle (Training) Mode Feedback Logic ---
+        console.log("Global showFeedback: Applying TRAINING logic.");
+        if (data.is_correct) {
+            consecutiveCorrect++;
+            if (feedbackElement) {
+                 feedbackElement.className = 'alert alert-success';
+                 feedbackElement.innerHTML = `<i class="fas fa-check-circle"></i> Correct! ${data.explanation}`;
+            }
+        } else {
+            consecutiveCorrect = 0;
+             if (feedbackElement) {
+                feedbackElement.className = 'alert alert-danger';
+                feedbackElement.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect. ${data.explanation}`;
+            }
+        }
+         if (xpElement) {
+            // Optional: Add animation for training mode XP
+            xpElement.classList.add('xp-gain');
+            setTimeout(() => {
+                xpElement.classList.remove('xp-gain');
+            }, 1000);
+        }
+        // --- End Training Mode Logic ---
+    }
+
+    // Schedule next step (common to both modes)
+    scheduleNextStepOrResults();
+};
+
+
+// Helper function to schedule next question or results
+function scheduleNextStepOrResults() {
+    const isBattleMode = typeof window.bossHealth !== 'undefined' && typeof window.playerHealth !== 'undefined';
+
+    // Check battle win/loss conditions if in battle mode
+    if (isBattleMode) {
+         console.log(`scheduleNextStepOrResults: Checking battle status - Boss HP: ${window.bossHealth}, Player HP: ${window.playerHealth}`);
+         if (window.bossHealth <= 0 || window.playerHealth <= 0) {
+            console.log("scheduleNextStepOrResults: Battle ended. Scheduling results display.");
+            window.stopTimer(); // Ensure timer is stopped
+            // Use a slightly shorter delay for results display after battle ends
+            setTimeout(window.showResults, 2000);
+            return; // Don't schedule next question
+        }
+    }
+
+    // Schedule next question after feedback display duration
+    console.log("scheduleNextStepOrResults: Scheduling next question.");
+    setTimeout(() => {
+        // Use the global currentQuestionIndex directly
+        console.log(`scheduleNextStepOrResults: Timeout triggered. Current index before increment: ${currentQuestionIndex}`); // Use global directly
+        // Ensure index is treated as a number before incrementing
+        const currentIndexNum = Number(currentQuestionIndex);
+        if (isNaN(currentIndexNum)){
+             console.error("scheduleNextStepOrResults: currentQuestionIndex is NaN before incrementing. Resetting to 0.");
+             currentQuestionIndex = 0; // Reset to 0 if NaN somehow occurred
+        }
+        const nextIndex = currentQuestionIndex + 1; // Increment the global index
+        console.log(`scheduleNextStepOrResults: Calculated next index: ${nextIndex}. Calling showQuestion.`);
+        window.showQuestion(nextIndex); // Call global showQuestion
+    }, 3000); // Show feedback for 3 seconds
+}
+
+
+// Submit answer function (primarily for training mode with textarea)
 function submitAnswer() {
-    // Stop the timer
-    if (timer) clearTimeout(timer);
-    
-    const userAnswerInput = document.getElementById('user-answer');
-    if (!userAnswerInput) return;
-    
+    window.stopTimer(); // Stop timer on submit
+
+    const userAnswerInput = document.getElementById('user-answer'); // Assumes ID for training textarea
+    if (!userAnswerInput) {
+         console.error("submitAnswer (training): Could not find #user-answer input.");
+         return;
+    }
+
+    console.log(`submitAnswer (training): Submitting answer for question index: ${currentQuestionIndex}`);
+
     const responseTime = (Date.now() - questionStartTime) / 1000;
     const userAnswer = userAnswerInput.value;
-    
+
     const currentQuestion = document.querySelector('.question-item:not([style*="display: none"])');
-    if (!currentQuestion) return;
-    
+    if (!currentQuestion) {
+        console.error("submitAnswer (training): Could not find current question element.");
+        return;
+    }
+
     const questionId = currentQuestion.dataset.questionId;
-    
-    // Clear the answer field for the next question
+
+    // Clear the answer field for the next question (training specific)
     userAnswerInput.value = '';
-    
-    // Show loading indicator
-    const submitButton = document.querySelector('#answer-form button[type="submit"]');
-    if (!submitButton) return;
-    
-    const originalButtonText = submitButton.innerHTML;
-    submitButton.disabled = true;
-    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Evaluating...';
-    
+
+    // Show loading indicator (training specific)
+    const submitButton = document.querySelector('#answer-form button[type="submit"]'); // Assumes ID for training form
+    let originalButtonText = 'Submit Answer'; // Default
+    if (submitButton) {
+        originalButtonText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Evaluating...';
+    }
+
     // Send the answer to the server for evaluation
-    fetch('/answer', {
+    fetch('/answer', { // Use the correct endpoint
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            // Add CSRF token if needed
         },
         body: JSON.stringify({
             question_id: questionId,
@@ -153,49 +383,39 @@ function submitAnswer() {
     })
     .then(response => response.json())
     .then(data => {
-        // Process the response
-        window.showFeedback(data, responseTime);
-        
-        // Reset the button
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonText;
-        
-        // After a delay, show the next question or results
-        setTimeout(() => {
-            const nextIndex = currentQuestionIndex + 1;
-            window.showQuestion(nextIndex);
-        }, 3000); // Show feedback for 3 seconds
+        // Process the response using the global feedback function
+        window.showFeedback(questionId, data); // Pass questionId
+
+        // Reset the button (training specific)
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
+        }
+        // Note: showFeedback now handles scheduling the next question
     })
     .catch(error => {
-        console.error('Error submitting answer:', error);
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonText;
-        
-        // Display error message
-        const feedbackElement = document.getElementById('answer-feedback');
-        if (feedbackElement) {
-            feedbackElement.className = 'alert alert-danger';
-            feedbackElement.innerHTML = '<i class="fas fa-exclamation-circle"></i> An error occurred while submitting your answer. Please try again.';
+        console.error('submitAnswer (training): Error submitting answer:', error);
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
+
+        // Display error message using global feedback function
+        window.showFeedback(questionId, {
+             is_correct: false,
+             explanation: `Error: ${error.message}. Please try again.`,
+             xp_earned: 0
+        });
     });
 }
 
-// Default battle status handler that can be overridden
-function handleBattleStatus(status) {
-    const battleStatusElement = document.getElementById('battle-status');
-    if (!battleStatusElement) return;
-    
-    if (status === 'won') {
-        battleStatusElement.innerHTML = '<div class="alert alert-success"><i class="fas fa-trophy"></i> You won the battle!</div>';
-    } else if (status === 'lost') {
-        battleStatusElement.innerHTML = '<div class="alert alert-danger"><i class="fas fa-skull-crossbones"></i> You lost the battle!</div>';
-    }
-}
+// Default battle status handler (placeholder, might not be needed if showFeedback handles it)
+// function handleBattleStatus(status) { ... }
 
 // DOM ready function
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Study RPG - JavaScript initialized');
-    
+
     // Initialize tooltips if Bootstrap is available
     if (typeof bootstrap !== 'undefined') {
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -207,26 +427,43 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize XP progress bars
     initializeXPProgressBars();
 
-    // Initialize question handling
-    const answerForm = document.getElementById('answer-form');
-    if (answerForm) {
-        answerForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            submitAnswer();
-        });
+    // Initialize page-specific elements (like initializeBattleMode)
+    // This needs to run BEFORE we try to show the first question
+    initializePageSpecificElements();
 
-        // Start with the first question if we're in question mode
-        const questionContainer = document.getElementById('question-container');
-        if (questionContainer) {
-            // Small delay to ensure DOM is ready
-            setTimeout(() => {
-                window.showQuestion(0);
-            }, 100);
-        }
+    // Check if we are on a page with questions (training or battle)
+    const questionContainer = document.getElementById('question-container');
+    const firstQuestion = document.querySelector('.question-item');
+
+    if (questionContainer && firstQuestion) {
+         // Attach generic submit handler ONLY if NOT in battle mode
+         const isBattleMode = document.getElementById('battle-arena'); // Check if battle arena exists
+         if (!isBattleMode) {
+             // Likely Training mode - attach the generic submitAnswer
+             const answerForm = document.getElementById('answer-form'); // Assumes training uses ID="answer-form"
+             if (answerForm) {
+                 console.log("Attaching training submit handler to #answer-form");
+                 answerForm.addEventListener('submit', function(e) {
+                     e.preventDefault();
+                     submitAnswer(); // The one that uses textarea
+                 });
+             } else {
+                  console.warn("Training mode detected, but #answer-form not found.");
+             }
+         } else {
+              console.log("Battle mode detected, submit handled by battle.html script.");
+         }
+
+        // Start with the first question (common for both modes)
+        // Use setTimeout to ensure DOM is fully ready and page-specific init has run
+        setTimeout(() => {
+            console.log("DOMContentLoaded: Calling initial showQuestion(0)");
+            window.showQuestion(0);
+        }, 100); // Small delay
+    } else {
+         console.log("DOMContentLoaded: No questions found on this page.");
     }
 
-    // Initialize page-specific elements
-    initializePageSpecificElements();
 });
 
 // Initialize page-specific elements based on current page
@@ -236,18 +473,18 @@ function initializePageSpecificElements() {
     if (battleArena) {
         initializeBattleMode();
     }
-    
+
     // Profile page specific
     const performanceChart = document.getElementById('performance-chart');
     if (performanceChart) {
         initializeProfileCharts();
     }
-    
-    // Training page specific
-    const trainingProgress = document.getElementById('training-progress');
-    if (trainingProgress) {
-        initializeTrainingMode();
-    }
+
+    // Training page specific (might not need specific init anymore)
+    // const trainingProgress = document.getElementById('training-progress');
+    // if (trainingProgress) {
+    //     initializeTrainingMode();
+    // }
 }
 
 // Add function to initialize XP progress bars
@@ -258,236 +495,197 @@ function initializeXPProgressBars() {
         const progress = xp % 100;
         bar.style.width = progress + '%';
         bar.setAttribute('aria-valuenow', progress);
-        // Optional: Update text content if needed, though templates handle it
-        // bar.textContent = `XP: ${progress}/100`; 
     });
 }
 
-// Training mode initialization
-function initializeTrainingMode() {
-    console.log('Training mode initialized');
-    
-    // Make feedback visible when needed
-    const feedbackElement = document.getElementById('answer-feedback');
-    if (feedbackElement) {
-        feedbackElement.style.display = 'block';
-    }
-}
+// Training mode initialization (placeholder if needed)
+// function initializeTrainingMode() { ... }
 
 // Battle mode initialization
 function initializeBattleMode() {
     console.log('Battle mode initialized');
-    
-    // Override the feedback function for battle mode
-    window.showFeedback = function(data, responseTime) {
-        const feedbackElement = document.getElementById('answer-feedback');
-        const xpElement = document.getElementById('xp-earned');
-        
-        if (!feedbackElement || !xpElement) return;
-        
-        // Standard feedback display
-        if (data.is_correct) {
-            consecutiveCorrect++;
-            feedbackElement.className = 'alert alert-success';
-            feedbackElement.innerHTML = `<i class="fas fa-check-circle"></i> Correct! ${data.explanation}`;
-            
-            // Damage the boss
-            const damage = data.xp_earned;
-            damageBoss(damage);
-        } else {
-            consecutiveCorrect = 0;
-            feedbackElement.className = 'alert alert-danger';
-            feedbackElement.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect. ${data.explanation}`;
-            
-            // Player takes damage
-            const damage = 10 + Math.floor(Math.random() * 10);
-            damagePlayer(damage);
-        }
-        
-        // Update battle score
-        if (typeof battleScore !== 'undefined') {
-            battleScore += data.xp_earned;
-            const battleScoreElement = document.getElementById('battle-score');
-            if (battleScoreElement) {
-                battleScoreElement.textContent = battleScore;
-            }
-        }
-        
-        // Show XP earned
-        totalXP += data.xp_earned;
-        xpElement.textContent = `+${data.xp_earned} XP`;
-        xpElement.classList.add('xp-gain');
-        
-        // Handle battle status update
-        if (data.battle_status && data.battle_status !== 'in-progress') {
-            handleBattleStatus(data.battle_status);
-        }
-        
-        // Remove animation class after animation completes
-        setTimeout(() => {
-            xpElement.classList.remove('xp-gain');
-        }, 1000);
-    };
-    
+
+    // Attach battle functions to window scope so global showFeedback can call them
+    // Ensure these functions are defined within this scope or globally accessible
+    window.damageBoss = damageBoss;
+    window.damagePlayer = damagePlayer;
+    window.showBattleEffect = showBattleEffect;
+    window.updateBattleMessage = updateBattleMessage;
+
+    // Initialize global battle state variables from DOM/defaults
+    const scoreElement = document.getElementById('battle-score');
+    const initialScore = scoreElement ? parseInt(scoreElement.textContent, 10) : 0;
+    const bossHealthElement = document.getElementById('boss-health-bar');
+    const initialBossHealth = bossHealthElement ? parseInt(bossHealthElement.getAttribute('aria-valuenow'), 10) : 100;
+    const playerHealthElement = document.getElementById('player-health-bar');
+    const initialPlayerHealth = playerHealthElement ? parseInt(playerHealthElement.getAttribute('aria-valuenow'), 10) : 100;
+
+    window.bossHealth = initialBossHealth;
+    window.playerHealth = initialPlayerHealth;
+    window.battleScore = initialScore;
+    // Reset global totalXP per battle? Or accumulate across sessions? Assuming accumulate for now.
+    // window.totalXP = 0; // Uncomment to reset XP per battle
+
+    console.log(`Initial Battle State: BossHP=${window.bossHealth}, PlayerHP=${window.playerHealth}, Score=${window.battleScore}`);
+
+
     // Override the results function for battle mode
     window.showResults = function() {
+        console.log("Battle showResults override called.");
+        window.stopTimer(); // Ensure timer is stopped
         const questionContainer = document.getElementById('question-container');
         const resultsContainer = document.getElementById('results-container');
         const battleArena = document.getElementById('battle-arena');
-        
-        if (questionContainer && resultsContainer) {
-            questionContainer.style.display = 'none';
-            if (battleArena) battleArena.style.display = 'none';
+
+        if (questionContainer) questionContainer.style.display = 'none';
+        if (battleArena) battleArena.style.display = 'none'; // Hide arena too
+
+        if (resultsContainer) {
             resultsContainer.style.display = 'block';
-            
-            // Update total XP and score displays
+
+            // Update total XP and score displays using global state
             const totalXpDisplay = document.getElementById('total-xp');
             if (totalXpDisplay) {
-                totalXpDisplay.textContent = totalXP;
+                totalXpDisplay.textContent = window.totalXP || 0; // Use global totalXP
             }
-            
+
             const finalScoreDisplay = document.getElementById('final-score');
-            if (finalScoreDisplay && typeof battleScore !== 'undefined') {
-                finalScoreDisplay.textContent = battleScore;
+            if (finalScoreDisplay) {
+                finalScoreDisplay.textContent = window.battleScore || 0; // Use global battleScore
             }
-            
-            // Show victory or defeat based on boss health
-            if (typeof bossHealth !== 'undefined') {
-                const victoryContainer = document.getElementById('victory-container');
-                const defeatContainer = document.getElementById('defeat-container');
-                
-                if (bossHealth <= 0 && victoryContainer) {
+
+            // Show victory or defeat based on global boss health
+            const victoryContainer = document.getElementById('victory-container');
+            const defeatContainer = document.getElementById('defeat-container');
+
+            if (victoryContainer && defeatContainer) {
+                if (window.bossHealth <= 0) {
+                    console.log("Battle Result: VICTORY");
                     victoryContainer.style.display = 'block';
-                } else if (defeatContainer) {
+                    defeatContainer.style.display = 'none';
+                } else {
+                     console.log("Battle Result: DEFEAT");
+                    victoryContainer.style.display = 'none';
                     defeatContainer.style.display = 'block';
                 }
+            } else {
+                 console.warn("Battle results: Missing victory or defeat container.");
             }
+        } else {
+             console.error("Battle results: Missing results container.");
         }
     };
-    
-    // Make feedback visible when needed
-    const feedbackElement = document.getElementById('answer-feedback');
-    if (feedbackElement) {
-        feedbackElement.style.display = 'block';
-    }
 }
 
-// Battle mode functions
-// These are conditionally used only when in battle mode
+// --- Battle Mechanics Functions (Should be available in battle mode) ---
+// These need to be defined so initializeBattleMode can attach them to window
+
 function damageBoss(amount) {
-    if (typeof bossHealth === 'undefined') {
-        window.bossHealth = 100;
-    }
-    
+    console.log(`damageBoss called with amount: ${amount}`);
     const healthBar = document.getElementById('boss-health-bar');
     const bossIcon = document.querySelector('.boss-icon');
-    
-    if (!healthBar || !bossIcon) return;
-    
-    // Create damage effect
-    showBattleEffect(amount, 'damage', '.boss-container');
-    
-    // Animate boss
+    const healthLabel = document.querySelector('.health-label'); // Target the specific label
+
+    if (!healthBar || !bossIcon || !healthLabel) {
+         console.error("damageBoss: Missing healthBar, bossIcon, or healthLabel element");
+         return;
+    }
+
+    // Use global showBattleEffect if available
+    if(typeof window.showBattleEffect === 'function') window.showBattleEffect(amount, 'damage', '.boss-container');
+
     bossIcon.classList.add('damaged');
-    setTimeout(() => {
-        bossIcon.classList.remove('damaged');
-    }, 500);
-    
-    // Update health
-    window.bossHealth = Math.max(0, window.bossHealth - amount);
+    setTimeout(() => { bossIcon.classList.remove('damaged'); }, 500);
+
+    window.bossHealth = Math.max(0, window.bossHealth - amount); // Update global state
     const healthPercent = (window.bossHealth / 100) * 100;
     healthBar.style.width = `${healthPercent}%`;
     healthBar.setAttribute('aria-valuenow', window.bossHealth);
-    
-    const healthLabel = document.querySelector('.health-label');
-    if (healthLabel) {
-        healthLabel.textContent = `Boss HP: ${window.bossHealth}/100`;
-    }
-    
-    // Update battle message
-    updateBattleMessage(true, amount);
-    
-    // Check if boss is defeated
+    healthLabel.textContent = `Boss HP: ${window.bossHealth}/100`; // Update label text
+
+    // Use global updateBattleMessage if available
+    if(typeof window.updateBattleMessage === 'function') window.updateBattleMessage(true, amount);
+
     if (window.bossHealth <= 0) {
-        if (healthBar) healthBar.style.width = '0%';
-        
-        const battleMessage = document.getElementById('battle-message');
-        if (battleMessage) {
-            battleMessage.innerHTML = '<p class="text-success mb-0">Boss defeated! Victory is yours!</p>';
-        }
+        // Feedback handled by showFeedback/showResults now
+        console.log("Boss health reached 0.");
     }
+    console.log(`damageBoss finished. New bossHealth: ${window.bossHealth}`);
 }
 
 function damagePlayer(amount) {
-    if (typeof playerHealth === 'undefined') {
-        window.playerHealth = 100;
-    }
-    
+    console.log(`damagePlayer called with amount: ${amount}`);
     const healthBar = document.getElementById('player-health-bar');
-    if (!healthBar) return;
-    
-    // Create damage effect
-    showBattleEffect(amount, 'damage', '.player-health-bar');
-    
-    // Update health
-    window.playerHealth = Math.max(0, window.playerHealth - amount);
+
+    if (!healthBar) {
+        console.error("damagePlayer: Missing player-health-bar element");
+        return;
+    }
+
+    // Use global showBattleEffect if available
+    if(typeof window.showBattleEffect === 'function') window.showBattleEffect(amount, 'damage', '.player-health-bar');
+
+    window.playerHealth = Math.max(0, window.playerHealth - amount); // Update global state
     const healthPercent = (window.playerHealth / 100) * 100;
     healthBar.style.width = `${healthPercent}%`;
     healthBar.setAttribute('aria-valuenow', window.playerHealth);
-    
-    // Update battle message
-    updateBattleMessage(false, amount);
-    
-    // Check if player is defeated
+
+    // Use global updateBattleMessage if available
+    if(typeof window.updateBattleMessage === 'function') window.updateBattleMessage(false, amount);
+
     if (window.playerHealth <= 0) {
-        if (healthBar) healthBar.style.width = '0%';
-        
-        const battleMessage = document.getElementById('battle-message');
-        if (battleMessage) {
-            battleMessage.innerHTML = '<p class="text-danger mb-0">You have been defeated by the boss!</p>';
-        }
-        
-        // End the battle after a short delay if player is defeated
-        setTimeout(() => {
-            window.showResults();
-        }, 2000);
+         // Feedback handled by showFeedback/showResults now
+         console.log("Player health reached 0.");
     }
+    console.log(`damagePlayer finished. New playerHealth: ${window.playerHealth}`);
 }
 
-// Battle effect function
 function showBattleEffect(amount, type, targetSelector) {
+    // This function seems okay, ensure it's defined globally or within scope
+    console.log(`showBattleEffect called: amount=${amount}, type=${type}, target=${targetSelector}`);
     const target = document.querySelector(targetSelector);
-    if (!target) return;
-    
+    const arena = document.getElementById('battle-arena'); // Effects should be relative to arena
+    if (!target || !arena) {
+        console.error(`showBattleEffect: Target (${targetSelector}) or Arena not found.`);
+        return;
+    }
     const effect = document.createElement('div');
     effect.className = `battle-effect ${type}`;
     effect.textContent = type === 'damage' ? `-${amount}` : `+${amount}`;
-    
-    // Position randomly within the target
-    const leftPos = 30 + Math.random() * 40;
-    effect.style.left = `${leftPos}%`;
-    
-    target.appendChild(effect);
-    
-    // Remove the element after animation completes
-    setTimeout(() => {
-        effect.remove();
-    }, 1500);
+
+    // Position relative to the arena, near the target
+    const rect = target.getBoundingClientRect();
+    const arenaRect = arena.getBoundingClientRect();
+    effect.style.position = 'absolute';
+    effect.style.left = `${rect.left - arenaRect.left + (rect.width / 2) - 15}px`; // Approx center
+    effect.style.top = `${rect.top - arenaRect.top - 30}px`; // Above target
+
+    arena.appendChild(effect); // Append to arena
+
+    setTimeout(() => { effect.remove(); }, 1500);
+    console.log("showBattleEffect finished.");
 }
 
-// Update battle message
 function updateBattleMessage(playerAttacking, amount) {
+    // This function seems okay, ensure it's defined globally or within scope
+    console.log(`updateBattleMessage called: playerAttacking=${playerAttacking}, amount=${amount}`);
     const messageElement = document.getElementById('battle-message');
-    if (!messageElement) return;
-    
+    if (!messageElement) {
+        console.error("updateBattleMessage: Missing battle-message element");
+        return;
+    }
     if (playerAttacking) {
         messageElement.innerHTML = `<p class="mb-0">You attacked the boss for <span class="text-danger">${amount}</span> damage!</p>`;
     } else {
         messageElement.innerHTML = `<p class="mb-0">The boss attacked you for <span class="text-danger">${amount}</span> damage!</p>`;
     }
+    console.log("updateBattleMessage finished.");
 }
 
-// Initialize charts on the profile page
+// --- End Battle Mechanics Functions ---
+
+
+// Initialize charts on the profile page (remains the same)
 function initializeProfileCharts() {
     // This requires Chart.js to be loaded
     if (typeof Chart === 'undefined') {
