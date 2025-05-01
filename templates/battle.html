@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+
+{% block title %}Battle Mode: {{ topic.title }} - Study RPG{% endblock %}
+
+{% block extra_css %}
+<style>
+    .battle-arena {
+        position: relative;
+        background-color: #343a40;
+        border-radius: 10px;
+        padding: 20px;
+        color: white;
+        margin-bottom: 30px;
+        overflow: hidden;
+    }
+    
+    .boss-container {
+        text-align: center;
+        position: relative;
+        padding: 20px;
+    }
+    
+    .boss-icon {
+        font-size: 80px;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .boss-icon.damaged {
+        color: #dc3545;
+        animation: shake 0.5s;
+    }
+    
+    .boss-health-bar {
+        height: 25px;
+        margin-bottom: 15px;
+    }
+    
+    .health-label {
+        position: absolute;
+        width: 100%;
+        text-align: center;
+        color: white;
+        font-weight: bold;
+        line-height: 25px;
+    }
+    
+    .player-health-bar {
+        height: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .battle-effect {
+        position: absolute;
+        font-size: 24px;
+        font-weight: bold;
+        animation: float-up 1.5s forwards;
+        opacity: 0;
+        z-index: 10;
+    }
+    
+    .battle-effect.damage {
+        color: #dc3545;
+    }
+    
+    .battle-effect.heal {
+        color: #28a745;
+    }
+    
+    @keyframes float-up {
+        0% {
+            transform: translateY(0);
+            opacity: 0;
+        }
+        20% {
+            opacity: 1;
+        }
+        80% {
+            opacity: 1;
+        }
+        100% {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+    }
+    
+    @keyframes shake {
+        0% { transform: translateX(0); }
+        25% { transform: translateX(5px); }
+        50% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+        100% { transform: translateX(0); }
+    }
+    
+    .battle-message {
+        background-color: rgba(0,0,0,0.6);
+        border-radius: 5px;
+        padding: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .level-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0,0,0,0.6);
+        padding: 5px 10px;
+        border-radius: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.view_topic', topic_id=topic.id) }}">{{ topic.title }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Battle</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Battle Arena -->
+    <div class="battle-arena" id="battle-arena">
+        <div class="level-indicator">
+            <span class="badge bg-warning">Level {{ battle.difficulty }}</span>
+            <span class="badge bg-info ms-1">Score: <span id="battle-score">{{ battle.score }}</span></span>
+        </div>
+        
+        <div class="boss-container">
+            <i class="fas fa-dragon boss-icon text-danger"></i>
+            <h3>Topic Boss: {{ topic.title }} Master</h3>
+            
+            <!-- Boss Health Bar -->
+            <div class="progress boss-health-bar">
+                <div class="progress-bar bg-danger" role="progressbar" style="width: 100%;" 
+                     id="boss-health-bar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+                </div>
+                <div class="health-label">Boss HP: 100/100</div>
+            </div>
+            
+            <div class="battle-message" id="battle-message">
+                <p class="mb-0">The {{ topic.title }} Boss challenges your knowledge! Answer correctly to defeat it!</p>
+            </div>
+        </div>
+        
+        <!-- Player Status -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h5>Your Health</h5>
+                <div class="progress player-health-bar">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 100%;" 
+                         id="player-health-bar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <h5>Time: <span id="question-timer" class="text-warning">00:00</span></h5>
+                <p id="question-progress">Question 1 of {{ questions|length }}</p>
+            </div>
+        </div>
+        
+        <!-- Battle Status -->
+        <div id="battle-status"></div>
+    </div>
+
+    <!-- Question Container -->
+    <div id="question-container">
+        {% if questions %}
+            {% for question in questions %}
+                <div class="question-item" data-question-id="{{ question.id }}" style="display: none;">
+                    <div class="card question-card mb-4">
+                        <div class="card-header bg-danger text-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3>Boss Question #{{ loop.index }}</h3>
+                                <span class="badge bg-warning">Difficulty {{ question.difficulty }}</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="lead">{{ question.content }}</p>
+                            
+                            <form id="answer-form" class="mt-4">
+                                <div class="mb-3">
+                                    <label for="user-answer" class="form-label">Your Answer:</label>
+                                    <textarea class="form-control" id="user-answer" rows="3" placeholder="Type your answer here..." required></textarea>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="fas fa-bolt"></i> Attack with Answer!
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Answer Feedback -->
+                    <div id="answer-feedback" class="alert" style="display: none;"></div>
+                    
+                    <!-- XP Earned Display -->
+                    <div class="text-center mb-4">
+                        <span id="xp-earned" class="badge bg-warning fs-5">+0 XP</span>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-warning">
+                <p>No battle questions are available for this topic yet.</p>
+                <a href="{{ url_for('main.view_topic', topic_id=topic.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Topic
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Battle Results Container (hidden initially) -->
+    <div id="results-container" style="display: none;">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h2><i class="fas fa-flag-checkered"></i> Battle Results</h2>
+            </div>
+            <div class="card-body text-center">
+                <div id="victory-container" style="display: none;">
+                    <h2 class="text-success mb-4"><i class="fas fa-trophy"></i> Victory!</h2>
+                    <p class="lead">You've defeated the {{ topic.title }} Boss!</p>
+                    <div class="alert alert-success">
+                        <p>Your knowledge has prevailed against the challenger.</p>
+                    </div>
+                </div>
+                
+                <div id="defeat-container" style="display: none;">
+                    <h2 class="text-danger mb-4"><i class="fas fa-skull-crossbones"></i> Defeat</h2>
+                    <p class="lead">The {{ topic.title }} Boss has defeated you!</p>
+                    <div class="alert alert-danger">
+                        <p>Train more and try again to conquer this challenge.</p>
+                    </div>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h4><i class="fas fa-award"></i> Battle Score</h4>
+                                <p class="display-4" id="final-score">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h4><i class="fas fa-star"></i> Total XP Earned</h4>
+                                <p class="display-4" id="total-xp">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h4><i class="fas fa-check-circle"></i> Knowledge Level</h4>
+                                <p class="display-4">{{ user.level|default(1) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="{{ url_for('main.battle_mode', topic_id=topic.id) }}" class="btn btn-danger btn-lg">
+                        <i class="fas fa-redo"></i> Battle Again
+                    </a>
+                    <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-dumbbell"></i> Train More
+                    </a>
+                    <a href="{{ url_for('main.view_topic', topic_id=topic.id) }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-arrow-left"></i> Back to Topic
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Battle-specific variables
+    let bossHealth = 100;
+    let playerHealth = 100;
+    // Fix: Replace Jinja template with data attribute
+    let battleScore = document.getElementById('battle-score') ? 
+        parseInt(document.getElementById('battle-score').textContent, 10) : 0;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show the first question right away
+        showQuestion(0);
+        
+        // Make feedback visible when needed
+        const feedbackElement = document.getElementById('answer-feedback');
+        if (feedbackElement) {
+            feedbackElement.style.display = 'block';
+        }
+        
+        // Override the feedback function for battle mode
+        window.showFeedback = function(data, responseTime) {
+            const feedbackElement = document.getElementById('answer-feedback');
+            const xpElement = document.getElementById('xp-earned');
+            
+            // Standard feedback display
+            if (data.is_correct) {
+                consecutiveCorrect++;
+                feedbackElement.className = 'alert alert-success';
+                feedbackElement.innerHTML = `<i class="fas fa-check-circle"></i> Correct! ${data.explanation}`;
+                
+                // Damage the boss
+                const damage = data.xp_earned;
+                damageBoss(damage);
+            } else {
+                consecutiveCorrect = 0;
+                feedbackElement.className = 'alert alert-danger';
+                feedbackElement.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect. ${data.explanation}`;
+                
+                // Player takes damage
+                const damage = 10 + Math.floor(Math.random() * 10);
+                damagePlayer(damage);
+            }
+            
+            // Update battle score
+            battleScore += data.xp_earned;
+            document.getElementById('battle-score').textContent = battleScore;
+            
+            // Show XP earned
+            totalXP += data.xp_earned;
+            xpElement.textContent = `+${data.xp_earned} XP`;
+            xpElement.classList.add('xp-gain');
+            
+            // Handle battle status update
+            if (data.battle_status && data.battle_status !== 'in-progress') {
+                handleBattleStatus(data.battle_status);
+            }
+            
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                xpElement.classList.remove('xp-gain');
+            }, 1000);
+        };
+        
+        // Override the results function for battle mode
+        window.showResults = function() {
+            const questionContainer = document.getElementById('question-container');
+            const resultsContainer = document.getElementById('results-container');
+            const battleArena = document.getElementById('battle-arena');
+            
+            if (questionContainer && resultsContainer) {
+                questionContainer.style.display = 'none';
+                battleArena.style.display = 'none';
+                resultsContainer.style.display = 'block';
+                
+                // Update total XP and score displays
+                document.getElementById('total-xp').textContent = totalXP;
+                document.getElementById('final-score').textContent = battleScore;
+                
+                // Show victory or defeat based on boss health
+                if (bossHealth <= 0) {
+                    document.getElementById('victory-container').style.display = 'block';
+                } else {
+                    document.getElementById('defeat-container').style.display = 'block';
+                }
+            }
+        };
+    });
+    
+    // Function to damage the boss
+    function damageBoss(amount) {
+        const healthBar = document.getElementById('boss-health-bar');
+        const bossIcon = document.querySelector('.boss-icon');
+        
+        // Create damage effect
+        showBattleEffect(amount, 'damage', '.boss-container');
+        
+        // Animate boss
+        bossIcon.classList.add('damaged');
+        setTimeout(() => {
+            bossIcon.classList.remove('damaged');
+        }, 500);
+        
+        // Update health
+        bossHealth = Math.max(0, bossHealth - amount);
+        const healthPercent = (bossHealth / 100) * 100;
+        healthBar.style.width = `${healthPercent}%`;
+        healthBar.setAttribute('aria-valuenow', bossHealth);
+        document.querySelector('.health-label').textContent = `Boss HP: ${bossHealth}/100`;
+        
+        // Update battle message
+        updateBattleMessage(true, amount);
+        
+        // Check if boss is defeated
+        if (bossHealth <= 0) {
+            document.getElementById('boss-health-bar').style.width = '0%';
+            document.getElementById('battle-message').innerHTML = 
+                '<p class="text-success mb-0">Boss defeated! Victory is yours!</p>';
+        }
+    }
+    
+    // Function to damage the player
+    function damagePlayer(amount) {
+        const healthBar = document.getElementById('player-health-bar');
+        
+        // Create damage effect
+        showBattleEffect(amount, 'damage', '.player-health-bar');
+        
+        // Update health
+        playerHealth = Math.max(0, playerHealth - amount);
+        const healthPercent = (playerHealth / 100) * 100;
+        healthBar.style.width = `${healthPercent}%`;
+        healthBar.setAttribute('aria-valuenow', playerHealth);
+        
+        // Update battle message
+        updateBattleMessage(false, amount);
+        
+        // Check if player is defeated
+        if (playerHealth <= 0) {
+            document.getElementById('player-health-bar').style.width = '0%';
+            document.getElementById('battle-message').innerHTML = 
+                '<p class="text-danger mb-0">You have been defeated by the boss!</p>';
+            
+            // End the battle after a short delay if player is defeated
+            setTimeout(() => {
+                showResults();
+            }, 2000);
+        }
+    }
+    
+    // Show floating battle effect text
+    function showBattleEffect(amount, type, targetSelector) {
+        const target = document.querySelector(targetSelector);
+        const effect = document.createElement('div');
+        effect.className = `battle-effect ${type}`;
+        effect.textContent = type === 'damage' ? `-${amount}` : `+${amount}`;
+        
+        // Position randomly within the target
+        const leftPos = 30 + Math.random() * 40;
+        effect.style.left = `${leftPos}%`;
+        
+        target.appendChild(effect);
+        
+        // Remove the element after animation completes
+        setTimeout(() => {
+            effect.remove();
+        }, 1500);
+    }
+    
+    // Update the battle message
+    function updateBattleMessage(playerAttacking, amount) {
+        const messageElement = document.getElementById('battle-message');
+        
+        if (playerAttacking) {
+            messageElement.innerHTML = `<p class="mb-0">You attacked the boss for <span class="text-danger">${amount}</span> damage!</p>`;
+        } else {
+            messageElement.innerHTML = `<p class="mb-0">The boss attacked you for <span class="text-danger">${amount}</span> damage!</p>`;
+        }
+    }
+</script>
+{% endblock %}

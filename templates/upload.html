@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Study Materials - Study RPG{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h2><i class="fas fa-upload"></i> Upload Study Materials</h2>
+            </div>
+            <div class="card-body">
+                <p class="lead">Upload your study materials (PDFs) to generate questions and start learning!</p>
+                
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="new-topic-toggle" checked>
+                            <label class="form-check-label" for="new-topic-toggle">Create a new topic</label>
+                        </div>
+                    </div>
+                    
+                    <!-- New Topic Fields -->
+                    <div id="new-topic-fields">
+                        <div class="mb-3">
+                            <label for="topic_title" class="form-label">Topic Title</label>
+                            <input type="text" class="form-control" id="topic_title" name="topic_title" placeholder="e.g., Biology 101, Spanish Vocabulary, etc.">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="topic_description" class="form-label">Topic Description</label>
+                            <textarea class="form-control" id="topic_description" name="topic_description" rows="2" placeholder="Brief description of what this topic covers..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Existing Topic Selection -->
+                    <div id="existing-topic-fields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="topic_id" class="form-label">Select Existing Topic</label>
+                            <select class="form-select" id="topic_id" name="topic_id">
+                                <option value="" selected disabled>Choose a topic...</option>
+                                {% for topic in topics %}
+                                <option value="{{ topic.id }}">{{ topic.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- File Upload -->
+                    <div class="mb-3">
+                        <label for="pdf_file" class="form-label">Select PDF File</label>
+                        <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+                        <div class="form-text">Maximum file size: 16MB</div>
+                    </div>
+                    
+                    <!-- Advanced Options -->
+                    <div class="mb-4">
+                        <div class="accordion" id="uploadOptionsAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingOptions">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOptions">
+                                        Advanced Options
+                                    </button>
+                                </h2>
+                                <div id="collapseOptions" class="accordion-collapse collapse" data-bs-parent="#uploadOptionsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <label for="question_count" class="form-label">Number of Questions to Generate</label>
+                                            <input type="number" class="form-control" id="question_count" name="question_count" value="5" min="1" max="20">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="difficulty" class="form-label">Initial Question Difficulty</label>
+                                            <select class="form-select" id="difficulty" name="difficulty">
+                                                <option value="1">Easy (1)</option>
+                                                <option value="2">Beginner (2)</option>
+                                                <option value="3" selected>Medium (3)</option>
+                                                <option value="4">Advanced (4)</option>
+                                                <option value="5">Expert (5)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-upload"></i> Upload & Generate Questions
+                        </button>
+                        <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer">
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle"></i> After uploading, our AI will analyze your document and generate study questions automatically!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const newTopicToggle = document.getElementById('new-topic-toggle');
+        const newTopicFields = document.getElementById('new-topic-fields');
+        const existingTopicFields = document.getElementById('existing-topic-fields');
+        
+        // Handle toggle between new/existing topic
+        newTopicToggle.addEventListener('change', function() {
+            if (this.checked) {
+                newTopicFields.style.display = 'block';
+                existingTopicFields.style.display = 'none';
+            } else {
+                newTopicFields.style.display = 'none';
+                existingTopicFields.style.display = 'block';
+            }
+        });
+        
+        // Check for URL parameter for pre-selecting a topic
+        const urlParams = new URLSearchParams(window.location.search);
+        const topicId = urlParams.get('topic_id');
+        
+        if (topicId) {
+            newTopicToggle.checked = false;
+            newTopicFields.style.display = 'none';
+            existingTopicFields.style.display = 'block';
+            
+            const topicSelect = document.getElementById('topic_id');
+            for (let i = 0; i < topicSelect.options.length; i++) {
+                if (topicSelect.options[i].value === topicId) {
+                    topicSelect.options[i].selected = true;
+                    break;
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

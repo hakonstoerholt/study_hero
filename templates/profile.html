@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Study RPG{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-4"><i class="fas fa-user-circle"></i> Profile</h1>
+        </div>
+    </div>
+    
+    <!-- User Profile Header -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-2 text-center">
+                            <div class="avatar-container mb-3">
+                                <i class="fas fa-user-graduate fa-5x text-primary"></i>
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    {{ user.level }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h2>{{ user.username }}</h2>
+                            <p class="text-muted">{{ user.email }}</p>
+                            
+                            <div class="mb-3">
+                                <h4>Level {{ user.level }}</h4>
+                                <div class="progress mb-2" style="height: 25px;">
+                                    <!-- Fix: Use data attribute and JS for XP progress calculation -->
+                                    <div class="progress-bar bg-success xp-progress-bar" role="progressbar" 
+                                         data-xp="{{ user.experience|default(0) }}" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        XP: {{ user.experience|default(0) % 100 }}/100
+                                    </div>
+                                </div>
+                                <p class="text-muted">Total Experience: {{ user.experience }}</p>
+                            </div>
+                            
+                            <div class="user-achievements mb-3">
+                                <h5><i class="fas fa-medal"></i> Achievements</h5>
+                                <span class="badge bg-primary me-1">First Topic</span>
+                                <span class="badge bg-success me-1">5 Correct Answers</span>
+                                <span class="badge bg-warning me-1">Battle Survivor</span>
+                                <span class="badge bg-info me-1">Document Master</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Study Streak</h5>
+                                    <p class="display-4">{{ streak|default(0) }} days</p>
+                                </div>
+                            </div>
+                            
+                            <a href="#" class="btn btn-outline-primary">
+                                <i class="fas fa-cog"></i> Edit Profile
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Performance Stats -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3><i class="fas fa-chart-line"></i> Performance Statistics</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="performance-chart" height="250"></canvas>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3><i class="fas fa-brain"></i> Knowledge Overview</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <h5>Topics Studied</h5>
+                            <h3>{{ topics|length }}</h3>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h5>Questions Answered</h5>
+                            <h3>{{ user_responses|default(0) }}</h3>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h5>Correct Answers</h5>
+                            <h3>{{ correct_answers|default(0) }}</h3>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h5>Knowledge Rate</h5>
+                            <h3>{{ knowledge_rate|default(0) }}%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6">
+            <!-- Recent Activity -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h3><i class="fas fa-history"></i> Recent Activity</h3>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        {% if battles %}
+                            {% for battle in battles[:5] %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-{{ 'trophy' if battle.status == 'won' else 'skull-crossbones' }} me-2 {{ 'text-success' if battle.status == 'won' else 'text-danger' }}"></i>
+                                    {{ battle.status|capitalize }} battle against "{{ topics|selectattr('id', 'eq', battle.topic_id)|map(attribute='title')|first|default('Unknown Topic') }}"
+                                    <small class="text-muted d-block">Score: {{ battle.score }}</small>
+                                </div>
+                                <small class="text-muted">{{ battle.started_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                            </li>
+                            {% endfor %}
+                        {% else %}
+                            <li class="list-group-item">No recent battles</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Study Topics -->
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3><i class="fas fa-book"></i> Your Study Topics</h3>
+                        <a href="{{ url_for('main.upload_document') }}" class="btn btn-sm btn-dark">
+                            <i class="fas fa-plus"></i> New Topic
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if topics %}
+                        <div class="list-group">
+                            {% for topic in topics %}
+                            <a href="{{ url_for('main.view_topic', topic_id=topic.id) }}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h5 class="mb-1">{{ topic.title }}</h5>
+                                    <small>{{ topic.created_at.strftime('%Y-%m-%d') }}</small>
+                                </div>
+                                <p class="mb-1">{{ topic.description|truncate(100) }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="fas fa-file-pdf"></i> {{ topic.documents|length }} documents
+                                        <i class="fas fa-question ms-2"></i> {{ topic.questions|length }} questions
+                                    </small>
+                                    <div>
+                                        <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-sm btn-outline-success me-1">
+                                            <i class="fas fa-dumbbell"></i> Train
+                                        </a>
+                                        <a href="{{ url_for('main.battle_mode', topic_id=topic.id) }}" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-dragon"></i> Battle
+                                        </a>
+                                    </div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info mb-0">
+                            <p>You haven't created any study topics yet.</p>
+                            <a href="{{ url_for('main.upload_document') }}" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Upload Study Material
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Create some sample data for the performance chart
+        const ctx = document.getElementById('performance-chart').getContext('2d');
+        
+        // This would be replaced with actual data from the server
+        const performanceData = {
+            labels: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+            datasets: [{
+                label: 'Questions Answered',
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 1,
+                data: [12, 8, 15, 5, 7, 9, 3]
+            }, {
+                label: 'XP Earned',
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 1,
+                data: [65, 40, 80, 25, 35, 45, 15]
+            }]
+        };
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: performanceData,
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                responsive: true
+            }
+        });
+    });
+</script>
+{% endblock %}

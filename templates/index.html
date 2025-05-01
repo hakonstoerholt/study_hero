@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Study RPG - Learn and Level Up!{% endblock %}
+
+{% block content %}
+<div class="jumbotron bg-light p-4 mb-4 rounded">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h1 class="display-4">Welcome to Study RPG</h1>
+            <p class="lead">Turn studying into an adventure! Upload study materials, answer questions, and battle bosses to level up your knowledge.</p>
+            
+            {% if user %}
+            <div class="user-stats mb-3">
+                <div class="progress mb-2" style="height: 25px;">
+                    <!-- Fix: Use data attribute and JS for XP progress calculation -->
+                    <div class="progress-bar bg-success xp-progress-bar" role="progressbar" 
+                         data-xp="{{ user.experience|default(0) }}" 
+                         aria-valuemin="0" aria-valuemax="100">
+                        XP: {{ user.experience|default(0) % 100 }}/100
+                    </div>
+                </div>
+                <h4>
+                    <span class="badge bg-primary"><i class="fas fa-user"></i> Level {{ user.level }}</span>
+                    <span class="badge bg-info"><i class="fas fa-trophy"></i> Total XP: {{ user.experience }}</span>
+                </h4>
+            </div>
+            {% endif %}
+            
+            <div class="mt-4">
+                <a href="{{ url_for('main.upload_document') }}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-upload"></i> Upload Study Material
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4 text-center">
+            <div class="game-icon p-3">
+                <i class="fas fa-book-reader fa-6x text-primary"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <h2><i class="fas fa-scroll"></i> Your Study Topics</h2>
+        
+        {% if topics %}
+        <div class="row row-cols-1 row-cols-md-2 g-4 mb-4">
+            {% for topic in topics %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ topic.title }}</h5>
+                        <p class="card-text">{{ topic.description }}</p>
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('main.view_topic', topic_id=topic.id) }}" class="btn btn-outline-primary">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                            <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-outline-success">
+                                <i class="fas fa-dumbbell"></i> Train
+                            </a>
+                            <a href="{{ url_for('main.battle_mode', topic_id=topic.id) }}" class="btn btn-outline-danger">
+                                <i class="fas fa-dragon"></i> Battle
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">Created: {{ topic.created_at.strftime('%Y-%m-%d') }}</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <p>You haven't created any study topics yet. 
+               <a href="{{ url_for('main.upload_document') }}">Upload study materials</a> to get started!</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3><i class="fas fa-info-circle"></i> Getting Started</h3>
+            </div>
+            <div class="card-body">
+                <ol class="list-group list-group-numbered mb-0">
+                    <li class="list-group-item d-flex">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Upload Documents</div>
+                            Upload PDFs of your study notes or textbooks
+                        </div>
+                    </li>
+                    <li class="list-group-item d-flex">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Train Your Knowledge</div>
+                            Practice with AI-generated questions
+                        </div>
+                    </li>
+                    <li class="list-group-item d-flex">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Battle Bosses</div>
+                            Test your mastery with challenging battles
+                        </div>
+                    </li>
+                    <li class="list-group-item d-flex">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Level Up</div>
+                            Earn XP and track your learning progress
+                        </div>
+                    </li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h3><i class="fas fa-chart-line"></i> Study Stats</h3>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Questions Answered
+                        <span class="badge bg-primary rounded-pill">{{ user_responses|default(0) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Correct Answers
+                        <span class="badge bg-success rounded-pill">{{ correct_answers|default(0) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Battles Won
+                        <span class="badge bg-warning rounded-pill">{{ battles_won|default(0) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Study Streak
+                        <span class="badge bg-info rounded-pill">{{ streak|default(0) }} days</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

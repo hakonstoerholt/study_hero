@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Training: {{ topic.title }} - Study RPG{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.view_topic', topic_id=topic.id) }}">{{ topic.title }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Training</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="mb-0"><i class="fas fa-dumbbell"></i> Training Mode: {{ topic.title }}</h2>
+                        <span class="question-timer" id="question-timer">00:00</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Progress indicator -->
+                    <div class="progress mb-4">
+                        <div id="training-progress" class="progress-bar bg-success" role="progressbar" style="width: 0%" 
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        </div>
+                    </div>
+                    <p class="text-center mb-3" id="question-progress">Question 1 of {{ questions|length }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question Container -->
+    <div id="question-container" data-questions-count="{{ questions|length|default(0) }}">
+        {% if questions %}
+            {% for question in questions %}
+                <div class="question-item" data-question-id="{{ question.id }}" style="display: none;">
+                    <div class="card question-card mb-4">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3>Question #{{ loop.index }}</h3>
+                                <span class="badge bg-secondary difficulty-badge-{{ question.difficulty }}">Level {{ question.difficulty }}</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="lead">{{ question.content }}</p>
+                            
+                            <form id="answer-form" class="mt-4">
+                                <div class="mb-3">
+                                    <label for="user-answer" class="form-label">Your Answer:</label>
+                                    <textarea class="form-control" id="user-answer" rows="3" placeholder="Type your answer here..." required></textarea>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-paper-plane"></i> Submit Answer
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Answer Feedback (hidden initially) -->
+                    <div id="answer-feedback" class="alert" style="display: none;"></div>
+                    
+                    <!-- XP Earned Display -->
+                    <div class="text-center mb-4">
+                        <span id="xp-earned" class="badge bg-warning fs-5">+0 XP</span>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-warning">
+                <p>No questions are available for this topic yet.</p>
+                <a href="{{ url_for('main.upload_document') }}?topic_id={{ topic.id }}" class="btn btn-primary">
+                    <i class="fas fa-upload"></i> Upload a document to generate questions
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Results Container (hidden initially) -->
+    <div id="results-container" style="display: none;">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h2><i class="fas fa-trophy"></i> Training Results</h2>
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-4">
+                    <h3>Training Session Complete!</h3>
+                    <p class="lead">You've completed your training session for <strong>{{ topic.title }}</strong></p>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h4><i class="fas fa-award"></i> Total XP Earned</h4>
+                                <p class="display-4" id="total-xp">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h4><i class="fas fa-brain"></i> Knowledge Level</h4>
+                                <p class="display-4">{{ user.level|default(1) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h4><i class="fas fa-bolt"></i> Next Challenge</h4>
+                                <a href="{{ url_for('main.battle_mode', topic_id=topic.id) }}" class="btn btn-danger btn-lg">
+                                    <i class="fas fa-dragon"></i> Battle Mode
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-redo"></i> Train Again
+                    </a>
+                    <a href="{{ url_for('main.view_topic', topic_id=topic.id) }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-arrow-left"></i> Back to Topic
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Read questions count from the data attribute
+        const questionContainer = document.getElementById('question-container');
+        const questionsCount = parseInt(questionContainer.dataset.questionsCount, 10) || 0;
+        
+        // Make feedback visible when needed
+        const feedbackElement = document.getElementById('answer-feedback');
+        if (feedbackElement) {
+            feedbackElement.style.display = 'block';
+        }
+        
+        // Update progress bar function
+        function updateProgressBar(index, total) {
+            const progressBar = document.getElementById('training-progress');
+            if (progressBar && total > 0) { // Check total > 0 to avoid division by zero
+                // Progress should reflect the *start* of the current question
+                const percentage = (index / total) * 100;
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', percentage);
+            }
+        }
+        
+        // Override the default showQuestion function to update progress bar
+        const originalShowQuestion = window.showQuestion;
+        
+        window.showQuestion = function(index) {
+            // Call the original function first
+            originalShowQuestion(index);
+            // Then update the progress bar for the *newly displayed* question
+            updateProgressBar(index, questionsCount);
+        };
+
+        // Show the first question and update the progress bar initially
+        if (questionsCount > 0) {
+            window.showQuestion(0); // This will now call the overridden version
+        }
+    });
+</script>
+{% endblock %}

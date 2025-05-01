@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}{{ topic.title }} - Study RPG{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Topic Header -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0"><i class="fas fa-book"></i> {{ topic.title }}</h2>
+                    <div>
+                        <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-success">
+                            <i class="fas fa-dumbbell"></i> Train
+                        </a>
+                        <a href="{{ url_for('main.battle_mode', topic_id=topic.id) }}" class="btn btn-danger">
+                            <i class="fas fa-dragon"></i> Battle
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="lead">{{ topic.description }}</p>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">
+                        <i class="fas fa-calendar"></i> Created: {{ topic.created_at.strftime('%Y-%m-%d') }}
+                    </small>
+                    <a href="{{ url_for('main.upload_document') }}?topic_id={{ topic.id }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-plus"></i> Add Document
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Documents Column -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h3><i class="fas fa-file-pdf"></i> Study Documents</h3>
+            </div>
+            <div class="card-body">
+                {% if topic.documents %}
+                <div class="list-group">
+                    {% for doc in topic.documents %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ doc.filename }}</h5>
+                            <small class="text-muted">{{ doc.upload_date.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                        <p class="mb-1">
+                            {% if doc.content %}
+                            {{ doc.content|truncate(100) }}
+                            {% else %}
+                            <em>No content extracted</em>
+                            {% endif %}
+                        </p>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-secondary view-content-btn" data-bs-toggle="modal" data-bs-target="#documentModal" data-document-id="{{ doc.id }}">
+                                <i class="fas fa-eye"></i> View Content
+                            </button>
+                            <a href="{{ url_for('main.upload_document') }}?regenerate={{ doc.id }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-sync"></i> Regenerate Questions
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p>No documents uploaded for this topic yet.</p>
+                    <a href="{{ url_for('main.upload_document') }}?topic_id={{ topic.id }}" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload Document
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Questions Column -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h3><i class="fas fa-question-circle"></i> Generated Questions</h3>
+            </div>
+            <div class="card-body">
+                {% if topic.questions %}
+                <div class="accordion" id="questionsAccordion">
+                    {% for question in topic.questions %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading{{ question.id }}">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ question.id }}">
+                                <span class="me-2 badge bg-secondary">Lvl {{ question.difficulty }}</span>
+                                {{ question.content|truncate(70) }}
+                            </button>
+                        </h2>
+                        <div id="collapse{{ question.id }}" class="accordion-collapse collapse" data-bs-parent="#questionsAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <strong>Question:</strong> {{ question.content }}
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Answer:</strong> {{ question.answer }}
+                                </div>
+                                {% if question.explanation %}
+                                <div class="mb-3">
+                                    <strong>Explanation:</strong> {{ question.explanation }}
+                                </div>
+                                {% endif %}
+                                <div class="text-end">
+                                    <small class="text-muted">Difficulty: {{ question.difficulty }}/5</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p>No questions generated for this topic yet.</p>
+                    <p>Upload a document to automatically generate questions.</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-success">
+                    <i class="fas fa-dumbbell"></i> Practice Questions
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Document Content Modal -->
+<div class="modal fade" id="documentModal" tabindex="-1" aria-labelledby="documentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="documentModalLabel">Document Content</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="document-content">
+                    <!-- Document content will be loaded here -->
+                    <p class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Loading document content...
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // This script would handle loading document content via AJAX when the View Content button is clicked
+    document.addEventListener('DOMContentLoaded', function() {
+        const viewContentButtons = document.querySelectorAll('.view-content-btn');
+        
+        viewContentButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const documentId = this.getAttribute('data-document-id');
+                const contentContainer = document.getElementById('document-content');
+                
+                // In a real app, this would be an AJAX call to fetch document content
+                contentContainer.innerHTML = '<p class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading content...</p>';
+                
+                // Simulate AJAX request for demo purposes
+                setTimeout(() => {
+                    // This would be replaced with the actual content from the server
+                    contentContainer.innerHTML = '<div class="p-3">Document content would be loaded here from the server.</div>';
+                }, 1000);
+            });
+        });
+    });
+</script>
+{% endblock %}

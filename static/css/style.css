@@ -1,0 +1,188 @@
+/* Study RPG - Main CSS */
+
+/* Body styling */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+main {
+    flex: 1;
+}
+
+/* Custom Colors */
+.bg-study-primary {
+    background-color: #3a506b;
+}
+
+.bg-study-secondary {
+    background-color: #5bc0de;
+}
+
+/* Card enhancements */
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Progress bar styling */
+.progress {
+    height: 25px;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* RPG/Game Elements */
+.user-stats {
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #dee2e6;
+}
+
+.battle-arena {
+    background-color: #343a40;
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.question-card {
+    border-left: 5px solid #007bff;
+}
+
+.question-card.correct {
+    border-left: 5px solid #28a745;
+}
+
+.question-card.incorrect {
+    border-left: 5px solid #dc3545;
+}
+
+/* Animation for XP gain */
+@keyframes xp-pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes xp-animation {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.xp-gain {
+    animation: xp-animation 1s ease;
+    display: inline-block;
+    color: #28a745;
+    font-weight: bold;
+}
+
+/* Badge enhancements */
+.badge-level {
+    font-size: 1em;
+    padding: 5px 10px;
+    margin-right: 5px;
+}
+
+/* Custom button styles */
+.btn-battle {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-battle:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    color: white;
+}
+
+.btn-train {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-train:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+    color: white;
+}
+
+/* Timer styling */
+.question-timer {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #17a2b8;
+    font-family: monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+/* Difficulty indicators */
+.difficulty-badge-1 { background-color: #28a745 !important; } /* Easy */
+.difficulty-badge-2 { background-color: #17a2b8 !important; } /* Beginner */
+.difficulty-badge-3 { background-color: #ffc107 !important; color: #343a40 !important; } /* Medium */
+.difficulty-badge-4 { background-color: #fd7e14 !important; } /* Advanced */
+.difficulty-badge-5 { background-color: #dc3545 !important; } /* Expert */
+
+/* Custom container for avatar */
+.avatar-container {
+    position: relative;
+    display: inline-block;
+}
+
+/* RPG-style elements */
+.game-icon {
+    position: relative;
+    display: inline-block;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+/* Override Bootstrap styles */
+.jumbotron {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Mobile responsiveness adjustments */
+@media (max-width: 768px) {
+    .card-title {
+        font-size: 1.2rem;
+    }
+    
+    .display-4 {
+        font-size: 2.5rem;
+    }
+    
+    .btn-lg {
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .question-timer {
+        font-size: 1.2rem;
+    }
+    
+    .boss-icon {
+        font-size: 60px !important;
+    }
+}
