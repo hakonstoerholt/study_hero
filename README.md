@@ -71,5 +71,3 @@ Turn studying into an adventure! Study RPG is a web application that gamifies th
 6.  **Profile:** Check your profile to see your level and stats.
 
 ---
-
-*This README provides a basic overview. You can expand it with more details about specific features, contribution guidelines, or deployment instructions.*
