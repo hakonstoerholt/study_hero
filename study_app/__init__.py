@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate # Import Migrate
+from flask_migrate import Migrate
 import os
 from config import Config
 
@@ -29,8 +29,8 @@ def create_app(config_class=Config):
     from study_app.routes import main_bp
     app.register_blueprint(main_bp)
     
-    # Create database tables (handled by migrations now, can be removed or kept)
-    # with app.app_context():
-    #     db.create_all()
-    
+    # Create tables if they do not exist
+    with app.app_context():
+        db.create_all()
+
     return app

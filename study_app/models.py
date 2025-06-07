@@ -15,6 +15,7 @@ class User(db.Model):
     total_xp = db.Column(db.Integer, nullable=False, default=0)  # Renamed from experience
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     topics = db.relationship('Topic', backref='owner', lazy=True)
+    quests = db.relationship('Quest', backref='user', lazy=True)
     
     def __repr__(self):
         return f'<User {self.username}>'
@@ -112,3 +113,19 @@ class Battle(db.Model):
     
     def __repr__(self):
         return f'<Battle {self.id}>'
+
+
+class Quest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    progress = db.Column(db.Integer, default=0)
+    target = db.Column(db.Integer, nullable=False, default=1)
+    quest_type = db.Column(db.String(20), default='training')
+    reward_xp = db.Column(db.Integer, default=50)
+    completed = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Quest {self.title}>'
