@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, jsonify, session
 from study_app import db
-from study_app.models import User, Topic, Document, Question, Battle, UserResponse
+from study_app.models import User, Topic, Document, Question, Battle, UserResponse, Quest
 from study_app.pdf_processor import process_pdf_file
 # Removed evaluate_answer import
 from study_app.ai_interface import generate_questions
@@ -128,9 +128,29 @@ def upload_document():
                     # xp_value is handled by default in the model
                 )
                 db.session.add(new_question)
-            
+
             db.session.commit()
-            
+
+            # Create default quests for the new topic
+            training_quest = Quest(
+                user_id=mock_user_id,
+                title=f"Study {topic_title}",
+                description="Answer 5 training questions from this topic",
+                target=5,
+                quest_type='training',
+                reward_xp=50
+            )
+            battle_quest = Quest(
+                user_id=mock_user_id,
+                title=f"Defeat the {topic_title} Boss",
+                description="Answer 5 battle questions correctly",
+                target=5,
+                quest_type='battle',
+                reward_xp=75
+            )
+            db.session.add_all([training_quest, battle_quest])
+            db.session.commit()
+
             flash('Document uploaded and processed successfully!')
             return redirect(url_for('main.view_topic', topic_id=topic_id))
     
@@ -240,6 +260,13 @@ def submit_answer():
             # e.g., if battle.score >= required_score: battle.status = 'won'
             battle_updated_status = battle.status
     
+    # Update quest progress for correct answers
+    from study_app.game_logic import update_quest_progress
+    quests_completed = []
+    if is_correct:
+        q_type = 'battle' if battle_id else 'training'
+        quests_completed = update_quest_progress(user.id, db.session, quest_type=q_type, increment=1)
+
     # Commit session changes
     db.session.commit()
     
@@ -253,7 +280,8 @@ def submit_answer():
         'leveled_up': leveled_up,
         # Send back updated user stats for potential UI updates
         'user_level': user.level,
-        'user_total_xp': user.total_xp
+        'user_total_xp': user.total_xp,
+        'quests_completed': quests_completed
     })
 
 @main_bp.route('/profile')
@@ -313,3 +341,11 @@ def delete_topic(topic_id):
         print(f"Error deleting topic {topic_id}: {e}") # Log the error
 
     return redirect(url_for('main.index'))
+
+
+@main_bp.route('/quests')
+def view_quests():
+    """Display active quests for the current user."""
+    user = get_current_user()
+    quests = Quest.query.filter_by(user_id=user.id).all() if user else []
+    return render_template('quests.html', quests=quests, user=user)

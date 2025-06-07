@@ -7,6 +7,31 @@ let currentQuestionIndex = 0; // Ensure this is the single source of truth
 let consecutiveCorrect = 0; // Primarily for training?
 let totalXP = 0; // Global XP accumulation
 
+function notifyQuestCompletion(titles) {
+    if (!Array.isArray(titles)) return;
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    titles.forEach(title => {
+        if (!title) return;
+        const toastEl = document.createElement('div');
+        toastEl.className = 'toast align-items-center text-bg-success';
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+        toastEl.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check-circle me-1"></i> Quest Completed: ${title}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>`;
+        container.appendChild(toastEl);
+        const bsToast = new bootstrap.Toast(toastEl, { delay: 4000 });
+        bsToast.show();
+    });
+}
+
 // Global battle state (initialize defaults, can be overridden by initializeBattleMode)
 window.bossHealth = 100;
 window.playerHealth = 100;
@@ -214,6 +239,10 @@ window.showFeedback = function(questionId, data) {
     // Update global totalXP regardless of mode
     totalXP += data.xp_earned;
     console.log(`Global showFeedback: Total XP updated to ${totalXP}`);
+
+    if (data.quests_completed && data.quests_completed.length) {
+        notifyQuestCompletion(data.quests_completed);
+    }
 
     // Check if battle functions exist (meaning we are in battle mode)
     const isBattleMode = typeof window.damageBoss === 'function' && typeof window.damagePlayer === 'function';

@@ -150,3 +150,31 @@ def award_xp(user_id, xp_to_add, db_session):
         # db_session.add(user) # Usually not needed if user is already in session
         return leveled_up # Return whether a level up occurred
     return False
+
+
+def update_quest_progress(user_id, db_session, quest_type=None, increment=1):
+    """Increment progress on active quests for a user.
+
+    Args:
+        user_id (int): The ID of the user.
+        db_session: Database session.
+        quest_type (str, optional): Filter quests by this type. If ``None`` all
+            active quests will be updated.
+        increment (int): Amount to increment progress by.
+    """
+    from study_app.models import Quest  # Local import to avoid circular
+
+    completed_titles = []
+    query = Quest.query.filter_by(user_id=user_id, completed=False)
+    if quest_type:
+        query = query.filter_by(quest_type=quest_type)
+    quests = query.all()
+    for quest in quests:
+        quest.progress += increment
+        if quest.progress >= quest.target:
+            quest.completed = True
+            completed_titles.append(quest.title)
+            award_xp(user_id, quest.reward_xp, db_session)
+    if quests:
+        db_session.commit()
+    return completed_titles
