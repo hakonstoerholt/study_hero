@@ -54,6 +54,12 @@ Turn studying into an adventure! Study RPG is a web application that gamifies th
 5.  **Initialize the database (if using Flask-Migrate or similar):**
     *   Check `app.py` or related files for database migration commands (e.g., `flask db init`, `flask db migrate`, `flask db upgrade`). Run them if necessary. If not using migrations, the database might be created automatically on the first run or require a specific setup step.
 
+6.  **Apply migrations:**
+    ```bash
+    flask db upgrade  # apply migrations (required for the new Quest system)
+    ```
+    Migrations must be run whenever new models are added.
+
 ## Usage
 
 1.  **Run the Flask application:**
