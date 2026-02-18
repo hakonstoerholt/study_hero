@@ -2,7 +2,6 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from study_app import db
 from study_app.models import User, Topic, Document, Question, Battle, UserResponse, Quest
 from study_app.pdf_processor import process_pdf_file
-# Removed evaluate_answer import
 from study_app.ai_interface import generate_questions
 from study_app.game_logic import calculate_xp, update_user_stats, award_xp
 import os
@@ -84,10 +83,14 @@ def upload_document():
                 # For now using a mock user until auth is implemented
                 mock_user_id = 1
                 
+                # Set the order based on existing topic count
+                existing_count = Topic.query.filter_by(user_id=mock_user_id).count()
+                
                 new_topic = Topic(
                     title=topic_title,
                     description=topic_description,
-                    user_id=mock_user_id
+                    user_id=mock_user_id,
+                    order=existing_count,
                 )
                 db.session.add(new_topic)
                 db.session.flush()  # Generate ID for new_topic without committing
@@ -119,13 +122,13 @@ def upload_document():
                     
                 new_question = Question(
                     content=q_data['question'],
-                    # Use the options_list setter to store options as JSON
+                    question_type=q_data.get('question_type', 'multiple_choice'),
+                    context=q_data.get('context', ''),
                     options_list=q_data['options'], 
                     answer=q_data['answer'],
                     explanation=q_data['explanation'],
                     difficulty=q_data['difficulty'],
                     topic_id=topic_id
-                    # xp_value is handled by default in the model
                 )
                 db.session.add(new_question)
 
@@ -212,9 +215,19 @@ def submit_answer():
     if not question:
         return jsonify({'error': 'Question not found'}), 404
 
-    # Direct comparison for multiple-choice
-    is_correct = (user_answer == question.answer)
-    explanation = question.explanation # Use the stored explanation
+    # Check answer based on question type
+    q_type = question.question_type or 'multiple_choice'
+    if q_type == 'ordering':
+        # For ordering, compare the full sequence string
+        is_correct = (user_answer.strip() == question.answer.strip())
+    elif q_type == 'fill_blank':
+        # Case-insensitive comparison for fill-in-the-blank
+        is_correct = (user_answer.strip().lower() == question.answer.strip().lower())
+    else:
+        # multiple_choice – exact match
+        is_correct = (user_answer == question.answer)
+
+    explanation = question.explanation
     
     xp_to_add = 0
     if is_correct:
@@ -255,10 +268,14 @@ def submit_answer():
         battle = db.session.get(Battle, battle_id)
         # Ensure battle belongs to the current user
         if battle and battle.user_id == user.id:
-            battle.score += xp_to_add 
-            # Potentially add logic here to end battle if won/lost
-            # e.g., if battle.score >= required_score: battle.status = 'won'
+            battle.score += xp_to_add
             battle_updated_status = battle.status
+
+            # Mark topic boss as defeated when battle is won
+            if battle.status == 'won':
+                topic = db.session.get(Topic, battle.topic_id)
+                if topic and not topic.boss_defeated:
+                    topic.boss_defeated = True
     
     # Update quest progress for correct answers
     from study_app.game_logic import update_quest_progress
@@ -319,18 +336,24 @@ def delete_topic(topic_id):
         return redirect(url_for('main.index'))
 
     try:
-        # Delete associated questions first
+        # Delete user responses for questions in this topic
+        question_ids = [q.id for q in Question.query.filter_by(topic_id=topic.id).all()]
+        if question_ids:
+            UserResponse.query.filter(UserResponse.question_id.in_(question_ids)).delete(synchronize_session='fetch')
+
+        # Delete associated questions
         Question.query.filter_by(topic_id=topic.id).delete()
-        # Delete associated documents (consider deleting files from disk too)
-        # Add logic here to delete files from the UPLOAD_FOLDER if needed
-        # for doc in topic.documents:
-        #     try:
-        #         os.remove(doc.file_path)
-        #     except OSError as e:
-        #         print(f"Error deleting file {doc.file_path}: {e}")
+        # Delete associated documents
         Document.query.filter_by(topic_id=topic.id).delete()
         # Delete associated battles
         Battle.query.filter_by(topic_id=topic.id).delete()
+        # Delete quests that were created for this topic (matched by title)
+        Quest.query.filter(
+            Quest.user_id == user.id,
+            db.or_(
+                Quest.title.contains(topic.title),
+            )
+        ).delete(synchronize_session='fetch')
         # Delete the topic itself
         db.session.delete(topic)
         db.session.commit()
@@ -349,3 +372,41 @@ def view_quests():
     user = get_current_user()
     quests = Quest.query.filter_by(user_id=user.id).all() if user else []
     return render_template('quests.html', quests=quests, user=user)
+
+
+@main_bp.route('/map')
+def world_map():
+    """Display the world map showing topic progression."""
+    user = get_current_user()
+    if not user:
+        flash("Please log in to view the map.", "warning")
+        return redirect(url_for('main.index'))
+
+    topics = (Topic.query
+              .filter_by(user_id=user.id)
+              .order_by(Topic.order)
+              .all())
+
+    # Calculate completion stats for each topic
+    topic_data = []
+    for topic in topics:
+        total_q = len(topic.questions)
+        answered = (UserResponse.query
+                    .join(Question)
+                    .filter(Question.topic_id == topic.id,
+                            UserResponse.user_id == user.id,
+                            UserResponse.is_correct == True)
+                    .count())
+        pct = int((answered / total_q) * 100) if total_q else 0
+        topic_data.append({
+            'topic': topic,
+            'total_questions': total_q,
+            'correct_answers': answered,
+            'completion_pct': min(100, pct),
+        })
+
+    # Check if all bosses are defeated for final boss unlock
+    all_defeated = all(t['topic'].boss_defeated for t in topic_data) if topic_data else False
+
+    return render_template('map.html', user=user, topic_data=topic_data,
+                           all_defeated=all_defeated)

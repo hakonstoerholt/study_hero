@@ -1,9 +1,6 @@
 from datetime import datetime
 from study_app import db
-# Import JSON type if using PostgreSQL or similar, otherwise use Text
-from sqlalchemy.dialects.postgresql import JSONB 
-# Or for SQLite/MySQL, use Text and handle JSON manually:
-from sqlalchemy import Text 
+from sqlalchemy import Text
 import json
 
 class User(db.Model):
@@ -35,6 +32,9 @@ class Topic(db.Model):
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    order = db.Column(db.Integer, default=0)  # Position on the world map
+    boss_defeated = db.Column(db.Boolean, default=False)  # Has the boss been beaten?
+    icon = db.Column(db.String(50), default='fa-book')  # FontAwesome icon for map
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     documents = db.relationship('Document', backref='topic', lazy=True)
     questions = db.relationship('Question', backref='topic', lazy=True)
@@ -56,14 +56,13 @@ class Document(db.Model):
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    # Store options as JSON or Text. Using Text for broader compatibility.
-    # If using PostgreSQL, JSONB is generally preferred:
-    # options = db.Column(JSONB) 
-    options = db.Column(Text) # Store options as a JSON string
-    answer = db.Column(db.Text, nullable=False) # This will store the TEXT of the correct option
+    question_type = db.Column(db.String(20), default='multiple_choice')  # multiple_choice, fill_blank, matching, ordering
+    context = db.Column(db.Text)  # Relevant excerpt shown to student during quiz
+    options = db.Column(Text)  # Store options as a JSON string
+    answer = db.Column(db.Text, nullable=False)
     explanation = db.Column(db.Text)
     difficulty = db.Column(db.Integer, default=1)  # 1-5 scale
-    xp_value = db.Column(db.Integer, nullable=False, default=10)  # Experience points awarded for correct answer
+    xp_value = db.Column(db.Integer, nullable=False, default=10)
     topic_id = db.Column(db.Integer, db.ForeignKey('topic.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_responses = db.relationship('UserResponse', backref='question', lazy=True)

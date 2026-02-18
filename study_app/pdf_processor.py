@@ -63,8 +63,8 @@ def clean_and_chunk_text(text, max_chunk_size=8000):
     # Basic cleaning
     # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text)
-    # Fix common OCR issues
-    text = text.replace('|', 'I').replace('1', 'l')
+    # Remove stray pipe characters (common OCR artifact)
+    text = re.sub(r'(?<![\w|])\|(?![\w|])', 'I', text)
     
     # If text is too long, chunk it (for large documents)
     if len(text) > max_chunk_size:

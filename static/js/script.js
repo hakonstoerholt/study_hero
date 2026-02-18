@@ -465,30 +465,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const firstQuestion = document.querySelector('.question-item');
 
     if (questionContainer && firstQuestion) {
-         // Attach generic submit handler ONLY if NOT in battle mode
-         const isBattleMode = document.getElementById('battle-arena'); // Check if battle arena exists
-         if (!isBattleMode) {
-             // Likely Training mode - attach the generic submitAnswer
-             const answerForm = document.getElementById('answer-form'); // Assumes training uses ID="answer-form"
-             if (answerForm) {
-                 console.log("Attaching training submit handler to #answer-form");
-                 answerForm.addEventListener('submit', function(e) {
-                     e.preventDefault();
-                     submitAnswer(); // The one that uses textarea
-                 });
-             } else {
-                  console.warn("Training mode detected, but #answer-form not found.");
-             }
-         } else {
-              console.log("Battle mode detected, submit handled by battle.html script.");
-         }
+         // Submit handlers are now attached by each page's own script
+         // (battle.html and training.html each attach their own handleSubmit)
+         const isBattleMode = document.getElementById('battle-arena');
+         const isTrainingMode = document.getElementById('training-progress');
 
-        // Start with the first question (common for both modes)
-        // Use setTimeout to ensure DOM is fully ready and page-specific init has run
-        setTimeout(() => {
-            console.log("DOMContentLoaded: Calling initial showQuestion(0)");
-            window.showQuestion(0);
-        }, 100); // Small delay
+         if (!isBattleMode && !isTrainingMode) {
+             // Fallback: if neither mode detected, try to show first question at least
+             console.log("DOMContentLoaded: Unknown question page, showing first question.");
+             setTimeout(() => {
+                 window.showQuestion(0);
+             }, 100);
+         }
+         // Battle & training modes handle showQuestion(0) in their own scripts
     } else {
          console.log("DOMContentLoaded: No questions found on this page.");
     }

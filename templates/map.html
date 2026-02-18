@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}World Map - Study Hero{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── World Map ────────────────────────────────── */
+    .map-wrapper {
+        position: relative;
+        min-height: 600px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+        border-radius: 16px;
+        overflow: hidden;
+        padding: 40px 20px 60px;
+    }
+
+    /* Stars background */
+    .map-wrapper::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+            radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,.3) 0%, transparent 100%),
+            radial-gradient(2px 2px at 60% 10%, rgba(255,255,255,.2) 0%, transparent 100%),
+            radial-gradient(1px 1px at 80% 50%, rgba(255,255,255,.4) 0%, transparent 100%),
+            radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,.2) 0%, transparent 100%),
+            radial-gradient(2px 2px at 10% 90%, rgba(255,255,255,.3) 0%, transparent 100%),
+            radial-gradient(1px 1px at 90% 80%, rgba(255,255,255,.25) 0%, transparent 100%);
+        pointer-events: none;
+    }
+
+    /* The path connecting nodes */
+    .map-path {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+    }
+
+    .path-segment {
+        width: 4px;
+        height: 50px;
+        background: repeating-linear-gradient(
+            to bottom,
+            rgba(255,255,255,.3) 0px,
+            rgba(255,255,255,.3) 8px,
+            transparent 8px,
+            transparent 16px
+        );
+    }
+
+    .path-segment.completed {
+        background: repeating-linear-gradient(
+            to bottom,
+            #ffd700 0px,
+            #ffd700 8px,
+            transparent 8px,
+            transparent 16px
+        );
+        box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+    }
+
+    /* Topic node */
+    .map-node {
+        position: relative;
+        width: 280px;
+        text-align: center;
+        z-index: 2;
+    }
+
+    .node-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-size: 32px;
+        transition: all 0.3s ease;
+        position: relative;
+        border: 3px solid rgba(255,255,255,.2);
+    }
+
+    .node-icon.locked {
+        background: #444;
+        color: #888;
+        border-color: #555;
+    }
+
+    .node-icon.available {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        border-color: #a78bfa;
+        cursor: pointer;
+        animation: node-pulse 2s ease-in-out infinite;
+    }
+
+    .node-icon.completed {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff;
+        border-color: #4ade80;
+    }
+
+    .node-icon.boss-defeated {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #fff;
+        border-color: #fbbf24;
+        box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+    }
+
+    @keyframes node-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4); }
+        50% { box-shadow: 0 0 20px 6px rgba(167, 139, 250, 0.2); }
+    }
+
+    .node-icon:hover:not(.locked) {
+        transform: scale(1.15);
+    }
+
+    .node-label {
+        color: #e2e8f0;
+        font-weight: 600;
+        font-size: 1rem;
+        margin-bottom: 4px;
+    }
+
+    .node-status {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .node-progress-ring {
+        position: absolute;
+        top: -4px;
+        left: -4px;
+        width: 88px;
+        height: 88px;
+    }
+
+    .node-progress-ring circle {
+        fill: none;
+        stroke-width: 3;
+    }
+
+    .node-progress-ring .bg { stroke: rgba(255,255,255,0.1); }
+    .node-progress-ring .fg { stroke: #fbbf24; stroke-linecap: round; transition: stroke-dashoffset .5s; }
+
+    /* Actions dropdown beneath node */
+    .node-actions {
+        margin-top: 6px;
+        opacity: 0;
+        transition: opacity .2s;
+    }
+
+    .map-node:hover .node-actions {
+        opacity: 1;
+    }
+
+    /* Final boss */
+    .final-boss-node .node-icon {
+        width: 100px;
+        height: 100px;
+        font-size: 44px;
+    }
+
+    .final-boss-node .node-icon.locked {
+        background: #1e1e3f;
+        border-color: #dc2626;
+        color: #dc2626;
+    }
+
+    .final-boss-node .node-icon.available {
+        background: linear-gradient(135deg, #dc2626, #991b1b);
+        border-color: #f87171;
+        animation: boss-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes boss-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+        50% { box-shadow: 0 0 30px 10px rgba(239, 68, 68, 0.3); }
+    }
+
+    /* Responsive zigzag layout */
+    .map-node:nth-child(odd) { align-self: flex-start; margin-left: 15%; }
+    .map-node:nth-child(even) { align-self: flex-end; margin-right: 15%; }
+    .path-segment:nth-child(odd) { align-self: center; }
+    .final-boss-node { align-self: center !important; margin: 0 !important; }
+
+    /* Stats bar at top */
+    .map-stats {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+    }
+
+    .map-stat {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 12px;
+        padding: 12px 20px;
+        text-align: center;
+        color: #e2e8f0;
+        min-width: 120px;
+    }
+
+    .map-stat-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #fbbf24;
+    }
+
+    .map-stat-label { font-size: 0.8rem; color: #94a3b8; }
+
+    @media (max-width: 768px) {
+        .map-node:nth-child(odd),
+        .map-node:nth-child(even) {
+            align-self: center;
+            margin-left: 0;
+            margin-right: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-white" style="text-shadow: 1px 1px 4px rgba(0,0,0,.5);">
+            <i class="fas fa-map-marked-alt me-2"></i>Study Quest Map
+        </h1>
+        <a href="{{ url_for('main.upload_document') }}" class="btn btn-outline-light">
+            <i class="fas fa-plus me-1"></i> New Topic
+        </a>
+    </div>
+
+    <div class="map-wrapper">
+        <!-- Stats bar -->
+        <div class="map-stats">
+            <div class="map-stat">
+                <div class="map-stat-value">{{ user.level }}</div>
+                <div class="map-stat-label">Level</div>
+            </div>
+            <div class="map-stat">
+                <div class="map-stat-value">{{ user.total_xp }}</div>
+                <div class="map-stat-label">Total XP</div>
+            </div>
+            <div class="map-stat">
+                <div class="map-stat-value">{{ topic_data | selectattr('topic.boss_defeated') | list | length }} / {{ topic_data | length }}</div>
+                <div class="map-stat-label">Bosses Defeated</div>
+            </div>
+        </div>
+
+        <!-- Topic path -->
+        <div class="map-path d-flex flex-column align-items-center">
+            {% for td in topic_data %}
+                {% set t = td.topic %}
+                {% set pct = td.completion_pct %}
+                {% set circumference = 264 %}
+
+                {# Determine node state #}
+                {% if t.boss_defeated %}
+                    {% set state = 'boss-defeated' %}
+                {% elif pct > 0 or loop.first %}
+                    {% set state = 'available' %}
+                {% else %}
+                    {# Unlock if previous boss defeated or it's the first #}
+                    {% if loop.first or topic_data[loop.index0 - 1].topic.boss_defeated %}
+                        {% set state = 'available' %}
+                    {% else %}
+                        {% set state = 'locked' %}
+                    {% endif %}
+                {% endif %}
+
+                <div class="map-node">
+                    <a href="{{ url_for('main.view_topic', topic_id=t.id) }}" class="text-decoration-none" {% if state == 'locked' %}style="pointer-events:none"{% endif %}>
+                        <div class="node-icon {{ state }}">
+                            {# Progress ring #}
+                            <svg class="node-progress-ring" viewBox="0 0 88 88">
+                                <circle class="bg" cx="44" cy="44" r="42" />
+                                <circle class="fg" cx="44" cy="44" r="42"
+                                        stroke-dasharray="{{ circumference }}"
+                                        stroke-dashoffset="{{ circumference - (circumference * pct / 100) }}"
+                                        transform="rotate(-90 44 44)" />
+                            </svg>
+                            {% if state == 'locked' %}
+                                <i class="fas fa-lock"></i>
+                            {% elif state == 'boss-defeated' %}
+                                <i class="fas fa-crown"></i>
+                            {% else %}
+                                <i class="fas {{ t.icon or 'fa-book' }}"></i>
+                            {% endif %}
+                        </div>
+                        <div class="node-label">{{ t.title }}</div>
+                        <div class="node-status">
+                            {% if state == 'boss-defeated' %}
+                                <span class="text-warning"><i class="fas fa-check-double"></i> Mastered!</span>
+                            {% elif state == 'locked' %}
+                                <i class="fas fa-lock"></i> Locked
+                            {% else %}
+                                {{ pct }}% • {{ td.total_questions }} questions
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% if state != 'locked' %}
+                    <div class="node-actions">
+                        <a href="{{ url_for('main.training_mode', topic_id=t.id) }}" class="btn btn-sm btn-outline-success me-1">
+                            <i class="fas fa-dumbbell"></i>
+                        </a>
+                        <a href="{{ url_for('main.battle_mode', topic_id=t.id) }}" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-dragon"></i>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if not loop.last %}
+                <div class="path-segment {% if t.boss_defeated %}completed{% endif %}"></div>
+                {% endif %}
+
+            {% endfor %}
+
+            {% if topic_data %}
+            {# Path to final boss #}
+            <div class="path-segment {% if all_defeated %}completed{% endif %}"></div>
+
+            {# Final Boss Node #}
+            <div class="map-node final-boss-node">
+                <div class="node-icon {% if all_defeated %}available{% else %}locked{% endif %}">
+                    {% if all_defeated %}
+                        <i class="fas fa-hat-wizard"></i>
+                    {% else %}
+                        <i class="fas fa-skull"></i>
+                    {% endif %}
+                </div>
+                <div class="node-label" style="font-size:1.2rem;">
+                    {% if all_defeated %}
+                        ⚔️ Final Challenge ⚔️
+                    {% else %}
+                        🔒 Final Boss
+                    {% endif %}
+                </div>
+                <div class="node-status">
+                    {% if all_defeated %}
+                        <span class="text-warning">Defeat all bosses to unlock!</span>
+                        {# TODO: link to final boss route #}
+                    {% else %}
+                        Defeat all topic bosses to unlock
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-compass fa-4x text-muted mb-3" style="opacity:.4"></i>
+                <h4 class="text-light">Your quest begins here!</h4>
+                <p class="text-muted">Upload study material to add your first topic to the map.</p>
+                <a href="{{ url_for('main.upload_document') }}" class="btn btn-primary btn-lg mt-2">
+                    <i class="fas fa-upload me-1"></i> Upload Material
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

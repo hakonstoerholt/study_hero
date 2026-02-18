@@ -6,12 +6,13 @@
 <style>
     .battle-arena {
         position: relative;
-        background-color: #343a40;
-        border-radius: 10px;
-        padding: 20px;
+        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+        border-radius: 14px;
+        padding: 24px;
         color: white;
         margin-bottom: 30px;
         overflow: hidden;
+        border: 2px solid #334155;
     }
     
     .boss-container {
@@ -24,6 +25,7 @@
         font-size: 80px;
         margin-bottom: 10px;
         transition: all 0.3s ease;
+        filter: drop-shadow(0 0 12px rgba(220, 38, 38, 0.5));
     }
     
     .boss-icon.damaged {
@@ -31,10 +33,7 @@
         animation: shake 0.5s;
     }
     
-    .boss-health-bar {
-        height: 25px;
-        margin-bottom: 15px;
-    }
+    .boss-health-bar { height: 25px; margin-bottom: 15px; }
     
     .health-label {
         position: absolute;
@@ -43,12 +42,10 @@
         color: white;
         font-weight: bold;
         line-height: 25px;
+        text-shadow: 0 1px 2px rgba(0,0,0,.6);
     }
     
-    .player-health-bar {
-        height: 20px;
-        margin-bottom: 15px;
-    }
+    .player-health-bar { height: 20px; margin-bottom: 15px; }
     
     .battle-effect {
         position: absolute;
@@ -59,43 +56,29 @@
         z-index: 10;
     }
     
-    .battle-effect.damage {
-        color: #dc3545;
-    }
-    
-    .battle-effect.heal {
-        color: #28a745;
-    }
+    .battle-effect.damage { color: #ef4444; }
+    .battle-effect.heal   { color: #22c55e; }
     
     @keyframes float-up {
-        0% {
-            transform: translateY(0);
-            opacity: 0;
-        }
-        20% {
-            opacity: 1;
-        }
-        80% {
-            opacity: 1;
-        }
-        100% {
-            transform: translateY(-50px);
-            opacity: 0;
-        }
+        0%   { transform: translateY(0);     opacity: 0; }
+        20%  { opacity: 1; }
+        80%  { opacity: 1; }
+        100% { transform: translateY(-50px); opacity: 0; }
     }
     
     @keyframes shake {
-        0% { transform: translateX(0); }
-        25% { transform: translateX(5px); }
-        50% { transform: translateX(-5px); }
-        75% { transform: translateX(5px); }
+        0%   { transform: translateX(0); }
+        25%  { transform: translateX(5px); }
+        50%  { transform: translateX(-5px); }
+        75%  { transform: translateX(5px); }
         100% { transform: translateX(0); }
     }
     
     .battle-message {
-        background-color: rgba(0,0,0,0.6);
-        border-radius: 5px;
-        padding: 10px;
+        background: rgba(0,0,0,0.5);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 12px;
         margin-bottom: 15px;
     }
     
@@ -103,40 +86,18 @@
         position: absolute;
         top: 10px;
         right: 10px;
-        background-color: rgba(0,0,0,0.6);
+        background: rgba(0,0,0,0.5);
         padding: 5px 10px;
-        border-radius: 5px;
+        border-radius: 8px;
     }
 
-    .options-container .form-check {
-        margin-bottom: 10px;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 10px 15px;
-        border-radius: 5px;
-        transition: background-color 0.2s ease;
+    /* Battle-specific ordering items (dark battle arena context) */
+    .ordering-list .ordering-item {
+        background: rgba(255,255,255,0.06);
+        border-color: #475569;
+        color: #e2e8f0;
     }
-    
-    .options-container .form-check:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    .options-container .form-check-input:checked + .form-check-label {
-        font-weight: bold;
-        color: #ffc107; /* Highlight selected option */
-    }
-    
-    /* Style for correct/incorrect options after submission */
-    .form-check.correct-option .form-check-label {
-        color: #28a745; /* Green for correct */
-        font-weight: bold;
-    }
-    .form-check.incorrect-option .form-check-label {
-        color: #dc3545; /* Red for incorrect */
-        text-decoration: line-through;
-    }
-    .form-check.selected-incorrect .form-check-label {
-        font-weight: bold; /* Keep selected incorrect bold */
-    }
+    .ordering-item.dragging { opacity: 0.5; border-color: #f59e0b; }
 </style>
 {% endblock %}
 
@@ -202,19 +163,76 @@
     <div id="question-container">
         {% if questions %}
             {% for question in questions %}
-                <div class="question-item" data-question-id="{{ question.id }}" style="display: none;">
+                <div class="question-item" data-question-id="{{ question.id }}" data-question-type="{{ question.question_type or 'multiple_choice' }}" style="display: none;">
                     <div class="card question-card mb-4">
                         <div class="card-header bg-danger text-white">
                             <div class="d-flex justify-content-between align-items-center">
-                                <h3>Boss Question #{{ loop.index }}</h3>
-                                <span class="badge bg-warning">Difficulty {{ question.difficulty }}</span>
+                                <h3>
+                                    {% if question.question_type == 'fill_blank' %}
+                                        <i class="fas fa-pencil-alt me-2"></i>
+                                    {% elif question.question_type == 'ordering' %}
+                                        <i class="fas fa-sort-amount-down me-2"></i>
+                                    {% else %}
+                                        <i class="fas fa-crosshairs me-2"></i>
+                                    {% endif %}
+                                    Boss Question #{{ loop.index }}
+                                </h3>
+                                <div>
+                                    <span class="badge bg-warning">Difficulty {{ question.difficulty }}</span>
+                                    {% if question.question_type == 'fill_blank' %}
+                                        <span class="badge bg-info ms-1">Fill Blank</span>
+                                    {% elif question.question_type == 'ordering' %}
+                                        <span class="badge bg-purple ms-1">Ordering</span>
+                                    {% else %}
+                                        <span class="badge bg-primary ms-1">Multiple Choice</span>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                         <div class="card-body">
+                            {% if question.context %}
+                            <div class="context-box mb-3">
+                                <small class="text-muted"><i class="fas fa-book-open me-1"></i> Intel from your scrolls:</small>
+                                <blockquote class="blockquote-context mt-1">{{ question.context }}</blockquote>
+                            </div>
+                            {% endif %}
+                            
                             <p class="lead">{{ question.content }}</p>
                             
-                            <!-- Changed from textarea to radio buttons -->
-                            <form class="answer-form mt-4" data-question-id="{{ question.id }}">
+                            <form class="answer-form mt-4" data-question-id="{{ question.id }}" data-question-type="{{ question.question_type or 'multiple_choice' }}">
+
+                                {% if question.question_type == 'ordering' %}
+                                {# -- ORDERING: drag-to-reorder list -- #}
+                                <div class="mb-3">
+                                    <label class="form-label"><i class="fas fa-arrows-alt-v me-1"></i> Drag to arrange in the correct order:</label>
+                                    <ul class="ordering-list list-group" data-question-id="{{ question.id }}">
+                                        {% for option in question.options_list %}
+                                        <li class="list-group-item ordering-item d-flex align-items-center" draggable="true" data-value="{{ option }}">
+                                            <i class="fas fa-grip-vertical me-3 text-muted drag-handle"></i>
+                                            <span class="ordering-number badge bg-secondary me-2">{{ loop.index }}</span>
+                                            {{ option }}
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    <input type="hidden" name="ordering_answer_{{ question.id }}" class="ordering-answer-input">
+                                </div>
+
+                                {% elif question.question_type == 'fill_blank' %}
+                                {# -- FILL BLANK: radio options -- #}
+                                <div class="mb-3 options-container">
+                                    <label class="form-label">Choose the word/phrase that fills the blank:</label>
+                                    {% for option in question.options_list %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_answer_{{ question.id }}" id="option_{{ question.id }}_{{ loop.index }}" value="{{ option }}" required>
+                                        <label class="form-check-label" for="option_{{ question.id }}_{{ loop.index }}">
+                                            {{ option }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+
+                                {% else %}
+                                {# -- MULTIPLE CHOICE (default) -- #}
                                 <div class="mb-3 options-container">
                                     <label class="form-label">Select your answer:</label>
                                     {% for option in question.options_list %}
@@ -226,6 +244,8 @@
                                     </div>
                                     {% endfor %}
                                 </div>
+                                {% endif %}
+
                                 <div class="d-grid gap-2">
                                     <button type="submit" class="btn btn-danger submit-answer-btn">
                                         <i class="fas fa-bolt"></i> Attack with Answer!
@@ -323,95 +343,158 @@
 
 {% block extra_js %}
 <script>
-    // Battle-specific handleSubmit
+    // --- Drag & Drop for ordering questions (same as training) ---
+    function initOrdering() {
+        document.querySelectorAll('.ordering-list').forEach(list => {
+            let dragItem = null;
+            list.querySelectorAll('.ordering-item').forEach(item => {
+                item.addEventListener('dragstart', e => {
+                    dragItem = item;
+                    item.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                item.addEventListener('dragend', () => {
+                    dragItem.classList.remove('dragging');
+                    dragItem = null;
+                    renumberList(list);
+                });
+                item.addEventListener('dragover', e => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const rect = item.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        list.insertBefore(dragItem, item);
+                    } else {
+                        list.insertBefore(dragItem, item.nextSibling);
+                    }
+                });
+            });
+        });
+    }
+
+    function renumberList(list) {
+        list.querySelectorAll('.ordering-number').forEach((badge, i) => {
+            badge.textContent = i + 1;
+        });
+    }
+
+    function getOrderingAnswer(form) {
+        const list = form.querySelector('.ordering-list');
+        if (!list) return null;
+        const items = list.querySelectorAll('.ordering-item');
+        return Array.from(items).map(i => i.dataset.value).join(' → ');
+    }
+
+    // Battle-specific handleSubmit (handles all question types)
     function handleSubmit(event) {
         event.preventDefault();
-        window.stopTimer(); // Use global timer function
-        console.log("handleSubmit called");
+        window.stopTimer();
 
         const form = event.target;
         const questionId = form.dataset.questionId;
-        const selectedOption = form.querySelector('input[type="radio"]:checked');
+        const qType = form.dataset.questionType || 'multiple_choice';
+        let userAnswer = '';
 
-        if (!selectedOption) {
-            alert('Please select an answer.');
-            // window.startTimer(); // Removed - showQuestion handles timer start
-            console.log("handleSubmit: No option selected");
-            // Re-enable button if user needs to select an option
-            const submitButton = form.querySelector('.submit-answer-btn');
-             if(submitButton) submitButton.disabled = false;
-            return;
+        if (qType === 'ordering') {
+            userAnswer = getOrderingAnswer(form);
+        } else {
+            const selectedOption = form.querySelector('input[type="radio"]:checked');
+            if (!selectedOption) {
+                alert('Please select an answer.');
+                const submitButton = form.querySelector('.submit-answer-btn');
+                if (submitButton) submitButton.disabled = false;
+                return;
+            }
+            userAnswer = selectedOption.value;
         }
 
-        const userAnswer = selectedOption.value;
-        // Use global questionStartTime set by window.showQuestion
-        const startTime = window.questionStartTime || Date.now(); // Fallback just in case
+        const startTime = window.questionStartTime || Date.now();
         const responseTime = (Date.now() - startTime) / 1000;
-        console.log(`handleSubmit: Submitting QID ${questionId}, Answer: ${userAnswer}, Time: ${responseTime}`);
 
-        // Disable form elements immediately
+        // Disable form
         const submitButton = form.querySelector('.submit-answer-btn');
-        if(submitButton) submitButton.disabled = true;
-        form.querySelectorAll('input[type="radio"]').forEach(radio => radio.disabled = true);
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Attacking...';
+        }
+        form.querySelectorAll('input[type="radio"]').forEach(r => r.disabled = true);
+        form.querySelectorAll('.ordering-item').forEach(i => i.setAttribute('draggable', 'false'));
 
         fetch('{{ url_for("main.submit_answer") }}', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // Add CSRF token header if needed
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 question_id: questionId,
                 answer: userAnswer,
-                response_time: responseTime,
-                // Include battle_id if needed by the backend
-                // battle_id: sessionStorage.getItem('battle_id')
+                response_time: responseTime
             })
         })
         .then(response => {
-            console.log("handleSubmit: Fetch response received", response);
             if (!response.ok) {
-                 // Try to get error message from response body for better feedback
-                 return response.text().then(text => {
-                     throw new Error(`HTTP error! status: ${response.status}, message: ${text || 'Server error'}`);
-                 });
+                return response.text().then(text => {
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${text || 'Server error'}`);
+                });
             }
             return response.json();
         })
         .then(data => {
-            console.log("handleSubmit: Fetch data received", data);
-            // Call global showFeedback with success data
-            // Ensure data includes necessary fields like is_correct, explanation, xp_earned, correct_answer
+            // Highlight options for MC / fill_blank
+            if (qType !== 'ordering') {
+                form.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    const lc = radio.closest('.form-check');
+                    if (!lc) return;
+                    lc.classList.remove('correct-option', 'incorrect-option', 'selected-incorrect');
+                    if (radio.value === data.correct_answer) {
+                        lc.classList.add('correct-option');
+                    } else if (radio.checked) {
+                        lc.classList.add('incorrect-option', 'selected-incorrect');
+                    }
+                });
+            } else {
+                // Highlight ordering items
+                const list = form.querySelector('.ordering-list');
+                if (list && data.correct_answer) {
+                    const correctOrder = data.correct_answer.split(' → ').map(s => s.trim());
+                    list.querySelectorAll('.ordering-item').forEach((item, i) => {
+                        if (correctOrder[i] && item.dataset.value === correctOrder[i]) {
+                            item.classList.add('list-group-item-success');
+                        } else {
+                            item.classList.add('list-group-item-danger');
+                        }
+                    });
+                }
+            }
             window.showFeedback(questionId, data);
         })
         .catch(error => {
-            console.error('handleSubmit: Fetch error:', error);
-            // Call global showFeedback with fetch error structure
-             window.showFeedback(questionId, {
+            console.error('Battle submit error:', error);
+            window.showFeedback(questionId, {
                 is_correct: false,
                 explanation: `Error submitting answer: ${error.message}. Please check console or try again.`,
                 xp_earned: 0,
-                correct_answer: '', // No correct answer known on fetch error
-                // battle_status might be relevant here too if available
+                correct_answer: ''
             });
-            // Keep form disabled on error? Or re-enable? Re-enabling might allow spamming.
-            // Consider adding a specific error display area if feedback isn't sufficient.
         });
     }
 
-    // Removed local showFeedback, damageBoss, damagePlayer, showBattleEffect, updateBattleMessage, showResults
-    // Logic is now centralized in script.js
-
     document.addEventListener('DOMContentLoaded', function() {
+        // Init drag & drop for ordering questions
+        initOrdering();
+
         // Attach event listeners to all battle forms
         document.querySelectorAll('.answer-form').forEach(form => {
             form.addEventListener('submit', handleSubmit);
         });
 
-        // Initial showQuestion(0) is handled by the global DOMContentLoaded in script.js
-        console.log("Battle.html DOMContentLoaded: Attached handleSubmit listeners.");
-        // Any other battle-specific setup that DOESN'T involve question flow can go here.
+        // Show the first question
+        const firstQuestion = document.querySelector('.question-item');
+        if (firstQuestion) {
+            setTimeout(() => {
+                console.log("Battle.html: Calling initial showQuestion(0)");
+                window.showQuestion(0);
+            }, 150);
+        }
     });
-
 </script>
 {% endblock %}

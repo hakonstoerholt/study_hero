@@ -42,24 +42,91 @@
     <div id="question-container" data-questions-count="{{ questions|length|default(0) }}">
         {% if questions %}
             {% for question in questions %}
-                <div class="question-item" data-question-id="{{ question.id }}" style="display: none;">
+                <div class="question-item" data-question-id="{{ question.id }}" data-question-type="{{ question.question_type or 'multiple_choice' }}" style="display: none;">
                     <div class="card question-card mb-4">
                         <div class="card-header">
                             <div class="d-flex justify-content-between align-items-center">
-                                <h3>Question #{{ loop.index }}</h3>
-                                <span class="badge bg-secondary difficulty-badge-{{ question.difficulty }}">Level {{ question.difficulty }}</span>
+                                <h3>
+                                    {% if question.question_type == 'fill_blank' %}
+                                        <i class="fas fa-pencil-alt me-2"></i>
+                                    {% elif question.question_type == 'ordering' %}
+                                        <i class="fas fa-sort-amount-down me-2"></i>
+                                    {% else %}
+                                        <i class="fas fa-list-ul me-2"></i>
+                                    {% endif %}
+                                    Question #{{ loop.index }}
+                                </h3>
+                                <div>
+                                    <span class="badge bg-secondary difficulty-badge-{{ question.difficulty }}">Level {{ question.difficulty }}</span>
+                                    {% if question.question_type == 'fill_blank' %}
+                                        <span class="badge bg-info ms-1">Fill Blank</span>
+                                    {% elif question.question_type == 'ordering' %}
+                                        <span class="badge bg-purple ms-1">Ordering</span>
+                                    {% else %}
+                                        <span class="badge bg-primary ms-1">Multiple Choice</span>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                         <div class="card-body">
+                            {% if question.context %}
+                            <div class="context-box mb-3">
+                                <small class="text-muted"><i class="fas fa-book-open me-1"></i> From your study material:</small>
+                                <blockquote class="blockquote-context mt-1">{{ question.context }}</blockquote>
+                            </div>
+                            {% endif %}
+
                             <p class="lead">{{ question.content }}</p>
                             
-                            <form id="answer-form" class="mt-4">
+                            <form class="answer-form mt-4" data-question-id="{{ question.id }}" data-question-type="{{ question.question_type or 'multiple_choice' }}">
+
+                                {% if question.question_type == 'ordering' %}
+                                {# -- ORDERING: drag-to-reorder list -- #}
                                 <div class="mb-3">
-                                    <label for="user-answer" class="form-label">Your Answer:</label>
-                                    <textarea class="form-control" id="user-answer" rows="3" placeholder="Type your answer here..." required></textarea>
+                                    <label class="form-label"><i class="fas fa-arrows-alt-v me-1"></i> Drag to arrange in the correct order:</label>
+                                    <ul class="ordering-list list-group" data-question-id="{{ question.id }}">
+                                        {% for option in question.options_list %}
+                                        <li class="list-group-item ordering-item d-flex align-items-center" draggable="true" data-value="{{ option }}">
+                                            <i class="fas fa-grip-vertical me-3 text-muted drag-handle"></i>
+                                            <span class="ordering-number badge bg-secondary me-2">{{ loop.index }}</span>
+                                            {{ option }}
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    <input type="hidden" name="ordering_answer_{{ question.id }}" class="ordering-answer-input">
                                 </div>
+
+                                {% elif question.question_type == 'fill_blank' %}
+                                {# -- FILL BLANK: radio options (same as MC but question has _____) -- #}
+                                <div class="mb-3 options-container">
+                                    <label class="form-label">Choose the word/phrase that fills the blank:</label>
+                                    {% for option in question.options_list %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_answer_{{ question.id }}" id="option_{{ question.id }}_{{ loop.index }}" value="{{ option }}" required>
+                                        <label class="form-check-label" for="option_{{ question.id }}_{{ loop.index }}">
+                                            {{ option }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+
+                                {% else %}
+                                {# -- MULTIPLE CHOICE (default) -- #}
+                                <div class="mb-3 options-container">
+                                    <label class="form-label">Select your answer:</label>
+                                    {% for option in question.options_list %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_answer_{{ question.id }}" id="option_{{ question.id }}_{{ loop.index }}" value="{{ option }}" required>
+                                        <label class="form-check-label" for="option_{{ question.id }}_{{ loop.index }}">
+                                            {{ option }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+
                                 <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-primary">
+                                    <button type="submit" class="btn btn-primary submit-answer-btn">
                                         <i class="fas fa-paper-plane"></i> Submit Answer
                                     </button>
                                 </div>
@@ -68,11 +135,11 @@
                     </div>
                     
                     <!-- Answer Feedback (hidden initially) -->
-                    <div id="answer-feedback" class="alert" style="display: none;"></div>
+                    <div id="answer-feedback-{{ question.id }}" class="alert" style="display: none;"></div>
                     
                     <!-- XP Earned Display -->
                     <div class="text-center mb-4">
-                        <span id="xp-earned" class="badge bg-warning fs-5">+0 XP</span>
+                        <span id="xp-earned-{{ question.id }}" class="badge bg-warning fs-5" style="visibility: hidden;">+0 XP</span>
                     </div>
                 </div>
             {% endfor %}
@@ -143,41 +210,163 @@
 
 {% block extra_js %}
 <script>
+    // --- Drag & Drop for ordering questions ---
+    function initOrdering() {
+        document.querySelectorAll('.ordering-list').forEach(list => {
+            let dragItem = null;
+
+            list.querySelectorAll('.ordering-item').forEach(item => {
+                item.addEventListener('dragstart', e => {
+                    dragItem = item;
+                    item.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                item.addEventListener('dragend', () => {
+                    dragItem.classList.remove('dragging');
+                    dragItem = null;
+                    renumberList(list);
+                });
+                item.addEventListener('dragover', e => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const rect = item.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        list.insertBefore(dragItem, item);
+                    } else {
+                        list.insertBefore(dragItem, item.nextSibling);
+                    }
+                });
+            });
+        });
+    }
+
+    function renumberList(list) {
+        list.querySelectorAll('.ordering-number').forEach((badge, i) => {
+            badge.textContent = i + 1;
+        });
+    }
+
+    function getOrderingAnswer(form) {
+        const list = form.querySelector('.ordering-list');
+        if (!list) return null;
+        const items = list.querySelectorAll('.ordering-item');
+        return Array.from(items).map(i => i.dataset.value).join(' → ');
+    }
+
+    // --- Training submit handler (handles all question types) ---
+    function handleTrainingSubmit(event) {
+        event.preventDefault();
+        window.stopTimer();
+
+        const form = event.target;
+        const questionId = form.dataset.questionId;
+        const qType = form.dataset.questionType || 'multiple_choice';
+        let userAnswer = '';
+
+        if (qType === 'ordering') {
+            userAnswer = getOrderingAnswer(form);
+        } else {
+            const selectedOption = form.querySelector('input[type="radio"]:checked');
+            if (!selectedOption) {
+                alert('Please select an answer.');
+                return;
+            }
+            userAnswer = selectedOption.value;
+        }
+
+        const startTime = window.questionStartTime || Date.now();
+        const responseTime = (Date.now() - startTime) / 1000;
+
+        const submitButton = form.querySelector('.submit-answer-btn');
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+        }
+        form.querySelectorAll('input[type="radio"]').forEach(r => r.disabled = true);
+        form.querySelectorAll('.ordering-item').forEach(i => i.setAttribute('draggable', 'false'));
+
+        fetch('{{ url_for("main.submit_answer") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question_id: questionId,
+                answer: userAnswer,
+                response_time: responseTime
+            })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            // Highlight options for MC / fill_blank
+            if (qType !== 'ordering') {
+                form.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    const lc = radio.closest('.form-check');
+                    if (!lc) return;
+                    lc.classList.remove('correct-option', 'incorrect-option', 'selected-incorrect');
+                    if (radio.value === data.correct_answer) {
+                        lc.classList.add('correct-option');
+                    } else if (radio.checked) {
+                        lc.classList.add('incorrect-option', 'selected-incorrect');
+                    }
+                });
+            } else {
+                // Highlight ordering items
+                const list = form.querySelector('.ordering-list');
+                if (list && data.correct_answer) {
+                    const correctOrder = data.correct_answer.split(' → ').map(s => s.trim());
+                    list.querySelectorAll('.ordering-item').forEach((item, i) => {
+                        if (correctOrder[i] && item.dataset.value === correctOrder[i]) {
+                            item.classList.add('list-group-item-success');
+                        } else {
+                            item.classList.add('list-group-item-danger');
+                        }
+                    });
+                }
+            }
+            window.showFeedback(questionId, data);
+        })
+        .catch(error => {
+            console.error('Training submit error:', error);
+            window.showFeedback(questionId, {
+                is_correct: false, explanation: `Error: ${error.message}`,
+                xp_earned: 0, correct_answer: ''
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
-        // Read questions count from the data attribute
         const questionContainer = document.getElementById('question-container');
         const questionsCount = parseInt(questionContainer.dataset.questionsCount, 10) || 0;
-        
-        // Make feedback visible when needed
-        const feedbackElement = document.getElementById('answer-feedback');
-        if (feedbackElement) {
-            feedbackElement.style.display = 'block';
-        }
-        
-        // Update progress bar function
+
+        // Init drag & drop
+        initOrdering();
+
+        // Attach submit handlers to all training forms
+        document.querySelectorAll('.answer-form').forEach(form => {
+            form.addEventListener('submit', handleTrainingSubmit);
+        });
+
+        // Override showQuestion to also update progress bar
         function updateProgressBar(index, total) {
             const progressBar = document.getElementById('training-progress');
-            if (progressBar && total > 0) { // Check total > 0 to avoid division by zero
-                // Progress should reflect the *start* of the current question
+            if (progressBar && total > 0) {
                 const percentage = (index / total) * 100;
                 progressBar.style.width = `${percentage}%`;
                 progressBar.setAttribute('aria-valuenow', percentage);
             }
         }
-        
-        // Override the default showQuestion function to update progress bar
+
         const originalShowQuestion = window.showQuestion;
-        
         window.showQuestion = function(index) {
-            // Call the original function first
             originalShowQuestion(index);
-            // Then update the progress bar for the *newly displayed* question
             updateProgressBar(index, questionsCount);
         };
 
-        // Show the first question and update the progress bar initially
         if (questionsCount > 0) {
-            window.showQuestion(0); // This will now call the overridden version
+            window.showQuestion(0);
         }
     });
 </script>

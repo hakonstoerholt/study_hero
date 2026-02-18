@@ -31,14 +31,13 @@
                             <div class="mb-3">
                                 <h4>Level {{ user.level }}</h4>
                                 <div class="progress mb-2" style="height: 25px;">
-                                    <!-- Fix: Use data attribute and JS for XP progress calculation -->
                                     <div class="progress-bar bg-success xp-progress-bar" role="progressbar" 
-                                         data-xp="{{ user.experience|default(0) }}" 
+                                         data-xp="{{ user.total_xp|default(0) }}" 
                                          aria-valuemin="0" aria-valuemax="100">
-                                        XP: {{ user.experience|default(0) % 100 }}/100
+                                        XP: {{ user.total_xp|default(0) % 100 }}/100
                                     </div>
                                 </div>
-                                <p class="text-muted">Total Experience: {{ user.experience }}</p>
+                                <p class="text-muted">Total Experience: {{ user.total_xp }}</p>
                             </div>
                             
                             <div class="user-achievements mb-3">
