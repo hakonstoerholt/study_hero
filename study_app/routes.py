@@ -224,7 +224,7 @@ def submit_answer():
         # Case-insensitive comparison for fill-in-the-blank
         is_correct = (user_answer.strip().lower() == question.answer.strip().lower())
     else:
-        # multiple_choice – exact match
+        # multiple_choice - exact match
         is_correct = (user_answer == question.answer)
 
     explanation = question.explanation

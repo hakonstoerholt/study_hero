@@ -12,7 +12,7 @@ from flask import current_app
 
 
 # ---------------------------------------------------------------------------
-# Provider: Ollama (default – free, local, private)
+# Provider: Ollama (default - free, local, private)
 # ---------------------------------------------------------------------------
 
 def _generate_with_ollama(prompt: str, model: str, base_url: str) -> str:
@@ -49,7 +49,7 @@ def _generate_with_ollama(prompt: str, model: str, base_url: str) -> str:
         )
     except requests.Timeout:
         raise TimeoutError(
-            "Ollama took too long to respond. The model may still be loading – "
+            "Ollama took too long to respond. The model may still be loading, "
             "try again in a moment."
         )
     except requests.HTTPError as exc:

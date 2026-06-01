@@ -1,4 +1,4 @@
-// Study RPG - Main JavaScript File
+// Study Hero - Main JavaScript File
 
 // Define global variables and functions first
 let timer = null;
@@ -443,7 +443,7 @@ function submitAnswer() {
 
 // DOM ready function
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Study RPG - JavaScript initialized');
+    console.log('Study Hero - JavaScript initialized');
 
     // Initialize tooltips if Bootstrap is available
     if (typeof bootstrap !== 'undefined') {

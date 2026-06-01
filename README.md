@@ -1,79 +1,102 @@
-# Study RPG
+# Study Hero
 
-Turn studying into an adventure! Study RPG is a web application that gamifies the learning process. Upload your study materials (PDFs), practice with AI-generated questions, test your knowledge in battles, and level up as you learn.
+A Flask web app that turns PDF study material into a quiz game. Upload a PDF, an
+LLM generates multiple-choice (and fill-in-the-blank / ordering) questions from
+the text, and you practice them in a training mode or fight a topic "boss" in a
+battle mode. Correct answers earn XP, XP levels you up, and topics unlock along a
+world map.
+
+The LLM runs locally through [Ollama](https://ollama.com) by default, so no API
+key or cloud account is needed to try it. You can point it at any
+OpenAI-compatible API instead if you prefer.
 
 ## Features
 
-*   **Upload Study Materials:** Upload PDF documents containing your notes or textbook chapters.
-*   **AI-Powered Question Generation:** Automatically generates quiz questions based on the uploaded content using AI (Gemini).
-*   **Training Mode:** Practice answering questions related to your study topics.
-*   **Battle Mode:** Test your mastery against challenging questions in a battle format.
-*   **Leveling System:** Earn Experience Points (XP) for correct answers and completing battles. Level up your profile as you progress.
-*   **Track Progress:** View your level, total XP, and study statistics.
+- Upload a PDF and get questions generated from its contents automatically.
+- Three question types: multiple choice, fill in the blank, and drag-to-order.
+- Training mode for practice and a battle mode with boss HP, player HP, and damage.
+- XP, levels, and a world map where defeating a topic boss unlocks the next topic.
+- Per-topic quests with progress tracking.
 
-## Technology Stack
+## Stack
 
-*   **Backend:** Python, Flask, SQLAlchemy
-*   **Frontend:** HTML, CSS (Bootstrap), JavaScript
-*   **AI:** Google Gemini API (for question generation and potentially answer evaluation)
-*   **Database:** SQLite (default, configurable via environment variable)
-*   **PDF Processing:** Uses a PyPDF2 library to extract information from Study Materials.
+- Backend: Python, Flask, SQLAlchemy, Flask-Migrate
+- Database: SQLite (any SQLAlchemy URL via `DATABASE_URL`)
+- Frontend: Jinja templates, Bootstrap 5, vanilla JS
+- PDF text extraction: PyPDF2
+- Question generation: Ollama (local) or any OpenAI-compatible API
 
-## Setup and Installation
+## Setup
 
-1.  **Clone the repository (if applicable):**
-    ```bash
-    git clone <your-repository-url>
-    cd study_rpg
-    ```
-2.  **Create and activate a virtual environment:**
-    ```bash
-    # Windows
-    python -m venv venv
-    .\venv\Scripts\activate
+1. Clone and enter the repo:
+   ```bash
+   git clone <repository-url>
+   cd study_hero
+   ```
 
-    # macOS/Linux
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  **Configure Environment Variables:**
-    *   Create a `.env` file in the project root directory.
-    *   Add the following variables:
-        ```dotenv
-        SECRET_KEY='your_strong_secret_key' # Replace with a real secret key
-        DATABASE_URL='sqlite:///instance/study_rpg.db' # Or your preferred database URL
-        GEMINI_API_KEY='your_google_gemini_api_key' # Add your Gemini API key
-        UPLOAD_FOLDER='uploads' # Optional: Change upload directory
-        ```
-    *   **Important:** Ensure `.env` is listed in your `.gitignore` file to avoid committing secrets.
+2. Create a virtual environment and install dependencies:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate      # Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
 
-5.  **Initialize the database (if using Flask-Migrate or similar):**
-    *   Check `app.py` or related files for database migration commands (e.g., `flask db init`, `flask db migrate`, `flask db upgrade`). Run them if necessary. If not using migrations, the database might be created automatically on the first run or require a specific setup step.
+3. Apply the database migrations:
+   ```bash
+   flask --app app db upgrade
+   ```
 
-6.  **Apply migrations:**
-    ```bash
-    flask db upgrade  # apply migrations (required for the new Quest system)
-    ```
-    Migrations must be run whenever new models are added.
+4. Get an LLM ready. By default the app talks to a local Ollama instance:
+   ```bash
+   ollama pull llama3.1:8b
+   ollama serve                  # or just open the Ollama app
+   ```
+   To use a cloud provider instead, see the configuration table below.
 
-## Usage
+## Configuration
 
-1.  **Run the Flask application:**
-    ```bash
-    flask run
-    ```
-    Or if using a run script (e.g., `run.py`):
-    ```bash
-    python run.py
-    ```
-2.  **Access the application:** Open your web browser and navigate to `http://127.0.0.1:5000` (or the address provided by Flask).
-3.  **Upload:** Go to the upload section and select a PDF file to create a new study topic.
-4.  **Train:** Select a topic and enter Training Mode to practice questions.
-5.  **Battle:** Select a topic and enter Battle Mode to test your knowledge under pressure.
-6.  **Profile:** Check your profile to see your level and stats.
+Configuration is read from environment variables (a `.env` file in the project
+root is loaded automatically). All of these have defaults, so the app runs with
+no `.env` at all when Ollama is available locally.
 
----
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SECRET_KEY` | `default-secret-key` | Flask session signing key. Set a real value. |
+| `DATABASE_URL` | `sqlite:///study_rpg.db` | SQLAlchemy database URL. |
+| `UPLOAD_FOLDER` | `uploads` | Where uploaded PDFs are stored. |
+| `LLM_PROVIDER` | `ollama` | `ollama` for local, or `openai` for an OpenAI-compatible API. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. |
+| `OLLAMA_MODEL` | `llama3.1:8b` | Ollama model to use. |
+| `OPENAI_API_KEY` | (empty) | API key when `LLM_PROVIDER=openai`. |
+| `OPENAI_BASE_URL` | `https://api.openai.com` | Base URL when `LLM_PROVIDER=openai`. |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Model when `LLM_PROVIDER=openai`. |
+
+The `openai` provider just hits a `/v1/chat/completions` endpoint, so it also
+works with anything that speaks that API (Gemini's OpenAI-compatible endpoint,
+local servers, etc.).
+
+## Run
+
+```bash
+python app.py
+```
+
+This starts the dev server at http://127.0.0.1:5000.
+
+## How it works
+
+1. Upload a PDF on the Upload page. PyPDF2 extracts the text and the first chunk
+   is sent to the configured LLM.
+2. The LLM returns questions as JSON, which are parsed, validated, and saved to
+   the topic. The parser is deliberately forgiving: it strips code fences, accepts
+   a few alternate key names, and repairs answers that do not exactly match an
+   option.
+3. Train or battle the topic. Answers are scored, XP is awarded, and quest and
+   boss progress update.
+
+There is no authentication yet. The app uses a single default user (id 1) that is
+created on first request, so everything is stored against that one account.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
