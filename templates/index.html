@@ -1,151 +1,124 @@
-{% extends "base.html" %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study Hero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="crt"></div>
 
-{% block title %}Study Hero - Learn and Level Up!{% endblock %}
+  <header id="hud">
+    <div class="brand">STUDY<span>HERO</span></div>
+    <div class="hud-player">
+      <div class="lvl-badge">LV <span id="hud-level">1</span></div>
+      <div class="bar xp">
+        <div class="bar-fill" id="hud-xp-fill"></div>
+        <span class="bar-label" id="hud-xp-label">0 / 0 XP</span>
+      </div>
+      <div class="hud-stats">
+        <span>WON <b id="hud-won">0</b></span>
+        <span>ACC <b id="hud-acc">0%</b></span>
+      </div>
+    </div>
+  </header>
 
-{% block content %}
-<div class="jumbotron p-4 mb-4 rounded">
-    <div class="row align-items-center">
-        <div class="col-md-8">
-            <h1 class="display-4">Welcome to Study Hero</h1>
-            <p class="lead">Upload study materials, answer generated questions, and battle topic bosses to level up your knowledge.</p>
-            
-            {% if user %}
-            <div class="user-stats mb-3">
-                <div class="progress mb-2" style="height: 25px;">
-                    <div class="progress-bar bg-success xp-progress-bar" role="progressbar" 
-                         data-xp="{{ user.total_xp|default(0) }}" 
-                         aria-valuemin="0" aria-valuemax="100">
-                        XP: {{ user.total_xp|default(0) % 100 }}/100
-                    </div>
-                </div>
-                <h4>
-                    <span class="badge bg-primary"><i class="fas fa-user"></i> Level {{ user.level }}</span>
-                    <span class="badge bg-info"><i class="fas fa-trophy"></i> Total XP: {{ user.total_xp }}</span>
-                </h4>
-            </div>
-            {% endif %}
-            
-            <div class="mt-4">
-                <a href="{{ url_for('main.upload_document') }}" class="btn btn-primary btn-lg">
-                    <i class="fas fa-upload"></i> Upload Study Material
-                </a>
-                <a href="{{ url_for('main.world_map') }}" class="btn btn-outline-light btn-lg ms-2">
-                    <i class="fas fa-map-marked-alt"></i> World Map
-                </a>
-            </div>
-        </div>
-        <div class="col-md-4 text-center">
-            <div class="game-icon p-3">
-                <i class="fas fa-hat-wizard fa-6x" style="color: #a78bfa;"></i>
-            </div>
-        </div>
-    </div>
-</div>
+  <main>
+    <!-- ============ START SCREEN ============ -->
+    <section id="screen-start" class="screen">
+      <h1 class="title">Choose your quest</h1>
+      <p class="subtitle">Turn anything into a battle. Answer to attack, learn to win.</p>
 
-<div class="row">
-    <div class="col-lg-8">
-        <h2><i class="fas fa-scroll"></i> Your Study Topics</h2>
-        
-        {% if topics %}
-        <div class="row row-cols-1 row-cols-md-2 g-4 mb-4">
-            {% for topic in topics %}
-            <div class="col">
-                <div class="card h-100">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title">{{ topic.title }}</h5>
-                        <p class="card-text flex-grow-1">{{ topic.description }}</p>
-                        <div class="mt-auto d-flex justify-content-between align-items-center">
-                            <a href="{{ url_for('main.view_topic', topic_id=topic.id) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                            <a href="{{ url_for('main.training_mode', topic_id=topic.id) }}" class="btn btn-sm btn-outline-success">
-                                <i class="fas fa-dumbbell"></i> Train
-                            </a>
-                            <a href="{{ url_for('main.battle_mode', topic_id=topic.id) }}" class="btn btn-sm btn-outline-danger">
-                                <i class="fas fa-dragon"></i> Battle
-                            </a>
-                            <form action="{{ url_for('main.delete_topic', topic_id=topic.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this topic and all its content? This cannot be undone.');" style="display: inline;">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="fas fa-trash-alt"></i> Delete
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="card-footer">
-                        <small class="text-muted">Created: {{ topic.created_at.strftime('%Y-%m-%d') }}</small>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="text">PASTE NOTES</button>
+        <button class="mode-tab" data-mode="pdf">UPLOAD PDF</button>
+        <button class="mode-tab" data-mode="topic">RESEARCH A TOPIC</button>
+      </div>
+
+      <div class="panel mode-panel" id="pane-text">
+        <textarea id="in-text" placeholder="Paste your notes or a textbook passage here..."></textarea>
+      </div>
+
+      <div class="panel mode-panel" id="pane-pdf" hidden>
+        <label class="filedrop" for="in-pdf">
+          <span id="pdf-label">Drop a PDF here or click to choose</span>
+          <input type="file" id="in-pdf" accept="application/pdf" hidden>
+        </label>
+      </div>
+
+      <div class="panel mode-panel" id="pane-topic" hidden>
+        <input type="text" id="in-topic" placeholder="e.g. the French Revolution, options greeks, photosynthesis">
+        <p class="hint">No notes needed. The scholar researches the web, then builds your quest.
+          Falls back to its own knowledge if offline.</p>
+      </div>
+
+      <button class="btn-primary" id="btn-start">SUMMON QUEST</button>
+      <p class="err" id="start-err" hidden></p>
+    </section>
+
+    <!-- ============ BATTLE SCREEN ============ -->
+    <section id="screen-battle" class="screen" hidden>
+      <div class="arena">
+        <div class="combatant monster">
+          <div class="bar hp"><div class="bar-fill" id="monster-hp"></div></div>
+          <div class="sprite-wrap" id="monster-sprite"></div>
+          <div class="name" id="monster-name">Knowledge Wraith</div>
         </div>
-        {% else %}
-        <div class="alert alert-info">
-            <p>You haven't created any study topics yet. 
-               <a href="{{ url_for('main.upload_document') }}">Upload study materials</a> to get started!</p>
+        <div class="combatant hero">
+          <div class="sprite-wrap" id="player-sprite"></div>
+          <div class="bar hp small"><div class="bar-fill" id="player-hp"></div></div>
+          <div class="name">Scholar</div>
         </div>
-        {% endif %}
-    </div>
-    
-    <div class="col-lg-4">
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                <h3><i class="fas fa-info-circle"></i> Getting Started</h3>
-            </div>
-            <div class="card-body">
-                <ol class="list-group list-group-numbered mb-0">
-                    <li class="list-group-item d-flex">
-                        <div class="ms-2 me-auto">
-                            <div class="fw-bold">Upload Documents</div>
-                            Upload PDFs of your study notes or textbooks
-                        </div>
-                    </li>
-                    <li class="list-group-item d-flex">
-                        <div class="ms-2 me-auto">
-                            <div class="fw-bold">Train Your Knowledge</div>
-                            Practice with AI-generated questions
-                        </div>
-                    </li>
-                    <li class="list-group-item d-flex">
-                        <div class="ms-2 me-auto">
-                            <div class="fw-bold">Battle Bosses</div>
-                            Test your mastery with challenging battles
-                        </div>
-                    </li>
-                    <li class="list-group-item d-flex">
-                        <div class="ms-2 me-auto">
-                            <div class="fw-bold">Level Up</div>
-                            Earn XP and track your learning progress
-                        </div>
-                    </li>
-                </ol>
-            </div>
+        <div class="floater" id="floater"></div>
+      </div>
+
+      <div class="panel dialogue">
+        <div class="q-meta">
+          <span id="q-progress">1 / 5</span>
+          <span id="q-diff" class="diff"></span>
         </div>
-        
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h3><i class="fas fa-chart-line"></i> Study Stats</h3>
-            </div>
-            <div class="card-body">
-                <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Questions Answered
-                        <span class="badge bg-primary rounded-pill">{{ user_responses|default(0) }}</span>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Correct Answers
-                        <span class="badge bg-success rounded-pill">{{ correct_answers|default(0) }}</span>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Battles Won
-                        <span class="badge bg-warning rounded-pill">{{ battles_won|default(0) }}</span>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Study Streak
-                        <span class="badge bg-info rounded-pill">{{ streak|default(0) }} days</span>
-                    </li>
-                </ul>
-            </div>
+        <p class="q-text" id="q-text">...</p>
+        <div class="options" id="options"></div>
+
+        <div class="feedback" id="feedback" hidden>
+          <p class="verdict" id="verdict"></p>
+          <p class="explain" id="explain"></p>
+          <div class="tutor" id="tutor" hidden>
+            <span class="tutor-tag">TUTOR</span>
+            <p id="tutor-text"></p>
+          </div>
+          <button class="btn-primary small" id="btn-next">CONTINUE</button>
         </div>
-    </div>
-</div>
-{% endblock %}
+      </div>
+    </section>
+
+    <!-- ============ RESULT SCREEN ============ -->
+    <section id="screen-result" class="screen" hidden>
+      <h1 class="title" id="result-title">VICTORY</h1>
+      <div class="panel result-card">
+        <p id="result-line"></p>
+        <div class="result-rows">
+          <div><span>XP gained</span><b id="result-xp">0</b></div>
+          <div><span>Correct</span><b id="result-correct">0</b></div>
+          <div><span>Level</span><b id="result-level">1</b></div>
+        </div>
+        <p class="levelup" id="result-levelup" hidden>LEVEL UP!</p>
+      </div>
+      <button class="btn-primary" id="btn-again">NEW QUEST</button>
+    </section>
+  </main>
+
+  <!-- summoning overlay -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="spinner"></div>
+    <p id="overlay-text">Summoning your quest...</p>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/sprites.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+</body>
+</html>

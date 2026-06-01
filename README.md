@@ -1,102 +1,71 @@
 # Study Hero
 
-A Flask web app that turns PDF study material into a quiz game. Upload a PDF, an
-LLM generates multiple-choice (and fill-in-the-blank / ordering) questions from
-the text, and you practice them in a training mode or fight a topic "boss" in a
-battle mode. Correct answers earn XP, XP levels you up, and topics unlock along a
-world map.
+A small study RPG. Turn your notes, a PDF, or just a topic into a quest of quiz
+questions, then battle through them: right answers hit the monster and earn XP,
+wrong answers cost HP and summon an AI tutor to explain what you missed.
 
-The LLM runs locally through [Ollama](https://ollama.com) by default, so no API
-key or cloud account is needed to try it. You can point it at any
-OpenAI-compatible API instead if you prefer.
+It runs locally against a local LLM (Ollama by default), so your material and your
+progress stay on your own machine.
 
-## Features
-
-- Upload a PDF and get questions generated from its contents automatically.
-- Three question types: multiple choice, fill in the blank, and drag-to-order.
-- Training mode for practice and a battle mode with boss HP, player HP, and damage.
-- XP, levels, and a world map where defeating a topic boss unlocks the next topic.
-- Per-topic quests with progress tracking.
-
-## Stack
-
-- Backend: Python, Flask, SQLAlchemy, Flask-Migrate
-- Database: SQLite (any SQLAlchemy URL via `DATABASE_URL`)
-- Frontend: Jinja templates, Bootstrap 5, vanilla JS
-- PDF text extraction: PyPDF2
-- Question generation: Ollama (local) or any OpenAI-compatible API
-
-## Setup
-
-1. Clone and enter the repo:
-   ```bash
-   git clone <repository-url>
-   cd study_hero
-   ```
-
-2. Create a virtual environment and install dependencies:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate      # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-3. Apply the database migrations:
-   ```bash
-   flask --app app db upgrade
-   ```
-
-4. Get an LLM ready. By default the app talks to a local Ollama instance:
-   ```bash
-   ollama pull llama3.1:8b
-   ollama serve                  # or just open the Ollama app
-   ```
-   To use a cloud provider instead, see the configuration table below.
-
-## Configuration
-
-Configuration is read from environment variables (a `.env` file in the project
-root is loaded automatically). All of these have defaults, so the app runs with
-no `.env` at all when Ollama is available locally.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SECRET_KEY` | `default-secret-key` | Flask session signing key. Set a real value. |
-| `DATABASE_URL` | `sqlite:///study_rpg.db` | SQLAlchemy database URL. |
-| `UPLOAD_FOLDER` | `uploads` | Where uploaded PDFs are stored. |
-| `LLM_PROVIDER` | `ollama` | `ollama` for local, or `openai` for an OpenAI-compatible API. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint. |
-| `OLLAMA_MODEL` | `llama3.1:8b` | Ollama model to use. |
-| `OPENAI_API_KEY` | (empty) | API key when `LLM_PROVIDER=openai`. |
-| `OPENAI_BASE_URL` | `https://api.openai.com` | Base URL when `LLM_PROVIDER=openai`. |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Model when `LLM_PROVIDER=openai`. |
-
-The `openai` provider just hits a `/v1/chat/completions` endpoint, so it also
-works with anything that speaks that API (Gemini's OpenAI-compatible endpoint,
-local servers, etc.).
-
-## Run
-
-```bash
-python app.py
-```
-
-This starts the dev server at http://127.0.0.1:5000.
+![Start screen](assets/start.png)
 
 ## How it works
 
-1. Upload a PDF on the Upload page. PyPDF2 extracts the text and the first chunk
-   is sent to the configured LLM.
-2. The LLM returns questions as JSON, which are parsed, validated, and saved to
-   the topic. The parser is deliberately forgiving: it strips code fences, accepts
-   a few alternate key names, and repairs answers that do not exactly match an
-   option.
-3. Train or battle the topic. Answers are scored, XP is awarded, and quest and
-   boss progress update.
+- **Three ways to start a quest**
+  - Paste notes or a passage
+  - Upload a PDF
+  - Research a topic with no notes: it searches the web, reads a few sources, and
+    synthesizes a study brief, falling back to the model's own knowledge if offline
+- **Battle**: every question is a turn. Correct answers damage the monster and earn
+  XP scaled by difficulty; wrong answers cost HP.
+- **AI tutor**: miss a question and the tutor explains why the right answer is right
+  and what the likely misunderstanding was.
+- **Progress**: XP, levels, and accuracy carry over between sessions.
 
-There is no authentication yet. The app uses a single default user (id 1) that is
-created on first request, so everything is stored against that one account.
+![Battle](assets/battle.png)
+
+![The tutor on a wrong answer](assets/battle_feedback.png)
+
+## Running it
+
+Study Hero talks to a local LLM through [Ollama](https://ollama.com).
+
+```bash
+# 1. install Ollama, then pull a small instruct model
+ollama pull qwen2.5:3b
+
+# 2. set up Python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. run it
+python app.py
+```
+
+Then open http://localhost:5001.
+
+### Configuration (optional)
+
+Everything is set through environment variables:
+
+- `OLLAMA_MODEL` (default `qwen2.5:3b`) and `OLLAMA_BASE_URL` (default `http://localhost:11434`)
+- To use an OpenAI-compatible API instead: set `LLM_PROVIDER=openai`, plus `OPENAI_API_KEY`,
+  `OPENAI_MODEL`, and `OPENAI_BASE_URL`.
+
+## Project layout
+
+```
+app.py        # Flask app, quest creation, and the battle/answer API
+ai.py         # question generation, tutor, research synthesis (LLM)
+research.py   # web search and page fetch for the topic mode
+game.py       # leveling curve and battle math
+store.py      # player progress (JSON)
+pdf_utils.py  # PDF text extraction
+templates/    # the single page
+static/       # pixel-art styling and the game loop
+```
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE)

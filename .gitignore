@@ -21,9 +21,8 @@ instance/
 .vscode/
 .idea/
 
-# Database files
-*.db
-*.sqlite3
+# Player progress (local state)
+data/
 
 # Uploaded files
 uploads/*
